@@ -13,10 +13,11 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-card px-4 py-3 flex items-center justify-between">
-        <Link href="/dashboard" className="font-semibold">
+        <Link href="/dashboard" className="font-semibold text-sm sm:text-base">
           ChristianGetsFit
         </Link>
-        <nav className="flex gap-3 text-sm">
+        {/* Desktop nav — hidden on mobile (bottom bar used instead) */}
+        <nav className="hidden md:flex gap-4 text-sm">
           <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
             Home
           </Link>
@@ -33,6 +34,10 @@ export default async function DashboardLayout({
             Logout
           </a>
         </nav>
+        {/* Mobile — just logout */}
+        <a href="/api/auth/logout" className="md:hidden text-sm text-muted-foreground hover:text-foreground">
+          Logout
+        </a>
       </header>
       <main className="p-4 pb-20">{children}</main>
       <nav className="fixed bottom-0 left-0 right-0 border-t bg-card flex justify-around py-2 safe-area-pb md:hidden">
