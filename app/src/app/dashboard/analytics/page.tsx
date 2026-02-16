@@ -6,6 +6,7 @@ import {
   BarChart, Bar, ReferenceLine, PieChart, Pie, Cell, AreaChart, Area, Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type Analytics = {
   weightTrend: Array<{ date: string; weight: number }>;
@@ -30,6 +31,12 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "strength" | "fitbit">("overview");
+
+  function refreshData() {
+    fetch("/api/analytics")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setData(d));
+  }
 
   useEffect(() => {
     fetch("/api/analytics")
@@ -89,7 +96,7 @@ export default function AnalyticsPage() {
 
       {tab === "overview" && <OverviewTab data={data} />}
       {tab === "strength" && <StrengthTab data={data} />}
-      {tab === "fitbit" && <FitbitTab data={data} />}
+      {tab === "fitbit" && <FitbitTab data={data} onRefresh={refreshData} />}
     </div>
   );
 }
@@ -262,7 +269,36 @@ function StrengthTab({ data }: { data: Analytics }) {
   );
 }
 
-function FitbitTab({ data }: { data: Analytics }) {
+function FitbitSyncInline({ onSynced }: { onSynced: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function sync() {
+    setLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/fitbit/sync", { method: "POST" });
+      const d = await res.json();
+      setMsg(d.message ?? d.error ?? "Done");
+      if (res.ok && d.synced > 0) {
+        setTimeout(onSynced, 500);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <div className="space-y-2">
+      <Button onClick={sync} disabled={loading} variant="outline" size="sm">
+        {loading ? "Syncing…" : "Sync Fitbit now"}
+      </Button>
+      {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+    </div>
+  );
+}
+
+function FitbitTab({ data: initialData, onRefresh }: { data: Analytics; onRefresh: () => void }) {
+  const data = initialData;
+
   if (!data.fitbitLinked) {
     return (
       <Card>
@@ -277,8 +313,9 @@ function FitbitTab({ data }: { data: Analytics }) {
   if (data.fitbitTrend.length === 0) {
     return (
       <Card>
-        <CardContent className="p-8 text-center">
-          <p className="text-muted-foreground">No Fitbit data yet. Data will appear after the daily cron syncs your Fitbit stats.</p>
+        <CardContent className="p-8 text-center space-y-3">
+          <p className="text-muted-foreground">No Fitbit data yet. Sync now or wait for the daily automatic sync.</p>
+          <FitbitSyncInline onSynced={onRefresh} />
         </CardContent>
       </Card>
     );
@@ -291,6 +328,9 @@ function FitbitTab({ data }: { data: Analytics }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <FitbitSyncInline onSynced={onRefresh} />
+      </div>
       {hasHr && (
         <Card>
           <CardHeader>

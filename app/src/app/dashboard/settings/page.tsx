@@ -90,13 +90,16 @@ function SettingsPageInner() {
         </CardHeader>
         <CardContent className="space-y-2">
           {fitbitLinked ? (
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm text-green-600 font-medium">Connected</span>
-              <Button asChild variant="ghost" size="sm" className="ml-auto">
-                <a href="/api/fitbit/auth">Relink</a>
-              </Button>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm text-green-600 font-medium">Connected</span>
+                <Button asChild variant="ghost" size="sm" className="ml-auto">
+                  <a href="/api/fitbit/auth">Relink</a>
+                </Button>
+              </div>
+              <FitbitSyncButton />
+            </>
           ) : (
             <Button asChild variant="outline">
               <a href="/api/fitbit/auth">Link Fitbit</a>
@@ -137,6 +140,30 @@ export default function SettingsPage() {
     <Suspense fallback={<div className="max-w-lg mx-auto p-6">Loading…</div>}>
       <SettingsPageInner />
     </Suspense>
+  );
+}
+
+function FitbitSyncButton() {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  async function sync() {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/fitbit/sync", { method: "POST" });
+      const data = await res.json();
+      setMessage(data.message ?? data.error ?? "Done");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <div className="space-y-1">
+      <Button onClick={sync} disabled={loading} variant="outline" size="sm">
+        {loading ? "Syncing…" : "Sync last 7 days"}
+      </Button>
+      {message && <p className="text-sm text-muted-foreground">{message}</p>}
+    </div>
   );
 }
 

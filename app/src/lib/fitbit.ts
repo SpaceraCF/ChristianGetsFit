@@ -91,6 +91,64 @@ export async function getFitbitSleep(
   };
 }
 
+/** Fetch daily activity summary (steps, active minutes, resting HR) */
+export async function getFitbitDailySummary(
+  accessToken: string,
+  date: string
+): Promise<{ steps: number; activeMinutes: number; restingHr: number | null } | null> {
+  const actUrl = `${FITBIT_API}/activities/date/${date}.json`;
+  const actRes = await fetch(actUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!actRes.ok) return null;
+  const actData = await actRes.json();
+  const summary = actData.summary;
+  if (!summary) return null;
+
+  const hrUrl = `${FITBIT_API}/activities/heart/date/${date}/1d.json`;
+  const hrRes = await fetch(hrUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  let restingHr: number | null = null;
+  if (hrRes.ok) {
+    const hrData = await hrRes.json();
+    restingHr = hrData["activities-heart"]?.[0]?.value?.restingHeartRate ?? null;
+  }
+
+  return {
+    steps: summary.steps ?? 0,
+    activeMinutes: (summary.fairlyActiveMinutes ?? 0) + (summary.veryActiveMinutes ?? 0),
+    restingHr,
+  };
+}
+
+/** Refresh an expired Fitbit access token */
+export async function refreshFitbitToken(
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: number } | null> {
+  const clientId = process.env.FITBIT_CLIENT_ID;
+  const clientSecret = process.env.FITBIT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  const res = await fetch(FITBIT_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64"),
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in ?? 28800,
+  };
+}
+
 /** Returns true if HR data suggests 20+ min of elevated activity in the workout window */
 export async function verifyWorkoutWithFitbit(
   accessToken: string,
