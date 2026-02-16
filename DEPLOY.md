@@ -17,7 +17,7 @@
 2. Create a project (or use existing).
 3. **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**.
 4. Application type: **Web application**.
-5. Authorized redirect URIs: `https://your-app.onrender.com/api/auth/google/callback`
+5. Authorized redirect URIs: `https://cgf.one22.me/api/auth/google/callback`
    (and `http://localhost:3000/api/auth/google/callback` for local dev).
 6. Copy the **Client ID** and **Client Secret**.
 
@@ -27,7 +27,7 @@ In the **Web Service** → **Environment** tab, add (or edit):
 
 | Key | Value |
 |-----|--------|
-| `APP_URL` | `https://christian-gets-fit.onrender.com` (or your service URL) |
+| `APP_URL` | `https://cgf.one22.me` |
 | `NEXTAUTH_SECRET` | Use the one Render generated, or set your own long random string |
 | `CRON_SECRET` | Use the one Render generated, or set your own (for cron endpoints) |
 | `GOOGLE_CLIENT_ID` | From Google Cloud Console |
@@ -56,18 +56,18 @@ Optional (add when you're ready):
 
 Use [Render Cron Jobs](https://render.com/docs/cron-jobs) or an external scheduler (e.g. cron-job.org) to call:
 
-- **Daily:** `GET https://your-app.onrender.com/api/cron/daily`  
+- **Daily:** `GET https://cgf.one22.me/api/cron/daily`  
   Header: `Authorization: Bearer YOUR_CRON_SECRET`
-- **Weekly:** `GET .../api/cron/weekly`
-- **Rest-day:** `GET .../api/cron/rest-day`
-- **Schedule Cal.com (midnight Sunday night):** `GET .../api/cron/schedule-calcom`
+- **Weekly:** `GET https://cgf.one22.me/api/cron/weekly`
+- **Rest-day:** `GET https://cgf.one22.me/api/cron/rest-day`
+- **Schedule Cal.com (midnight Sunday night):** `GET https://cgf.one22.me/api/cron/schedule-calcom`
 
 See **README.md** for suggested times (e.g. Monday 00:00 AEDT for schedule-calcom).
 
 ## 6. Cal.com webhook (optional)
 
 In Cal.com: **Settings → Developer → Webhooks** → Subscriber URL:  
-`https://your-app.onrender.com/api/webhooks/calcom`  
+`https://cgf.one22.me/api/webhooks/calcom`  
 Trigger: **Booking Cancelled**. Set the same secret as `CALCOM_WEBHOOK_SECRET` in Render env.
 
 ## 7. Telegram webhook
@@ -75,7 +75,7 @@ Trigger: **Booking Cancelled**. Set the same secret as `CALCOM_WEBHOOK_SECRET` i
 After setting `TELEGRAM_BOT_TOKEN`, set the Telegram webhook:
 
 ```text
-https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-app.onrender.com/api/telegram/webhook
+https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://cgf.one22.me/api/telegram/webhook
 ```
 
 Then in the app: Settings → Link Telegram, and in Telegram send `/link YOUR_CODE`.

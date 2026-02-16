@@ -7,7 +7,7 @@ const EVENT_TYPE_SLUG = process.env.CALCOM_EVENT_TYPE_SLUG ?? "workout";
 
 /**
  * Cal.com webhook: on BOOKING_CANCELLED for workout event type, send Telegram reminder to rebook.
- * In Cal.com: Settings → Developer → Webhooks → Subscriber URL: https://your-app.com/api/webhooks/calcom
+ * In Cal.com: Settings → Developer → Webhooks → Subscriber URL: https://cgf.one22.me/api/webhooks/calcom
  * Trigger: Booking Cancelled. Optional: set a Secret and CALCOM_WEBHOOK_SECRET in env to verify payloads.
  */
 export async function POST(req: NextRequest) {

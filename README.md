@@ -37,7 +37,7 @@ Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 
    - `CALCOM_EVENT_TYPE_SLUG` (optional) – event type slug, default `workout`
    - `CALCOM_WEBHOOK_SECRET` (optional) – same secret as in Cal.com webhook, to verify cancellation webhooks
    - `FITBIT_CLIENT_ID` / `FITBIT_CLIENT_SECRET` (optional) – for Fitbit
-   - `APP_URL` – e.g. `http://localhost:3000`
+   - `APP_URL` – e.g. `https://cgf.one22.me`
    - `CRON_SECRET` – secret for cron endpoints
 
 3. **Database**
@@ -67,20 +67,20 @@ Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 
 ### Cron jobs (Render Cron or external)
 
 - **Daily (e.g. 8:00 UTC)**  
-  `GET https://your-app.onrender.com/api/cron/daily`  
+  `GET https://cgf.one22.me/api/cron/daily`  
   Header: `Authorization: Bearer YOUR_CRON_SECRET`
 
 - **Weekly (e.g. Sunday 20:00 UTC)**  
-  `GET https://your-app.onrender.com/api/cron/weekly`  
+  `GET https://cgf.one22.me/api/cron/weekly`  
   Same header.
 
 - **Rest-day (e.g. 7:00 UTC)**  
-  `GET https://your-app.onrender.com/api/cron/rest-day`  
+  `GET https://cgf.one22.me/api/cron/rest-day`  
   Same header. Requires Fitbit linked.
 
 - **Schedule Cal.com – midnight Sunday night (start of Monday) every week**  
   e.g. Monday 00:00 AEDT = Sunday 13:00 UTC  
-  `GET https://your-app.onrender.com/api/cron/schedule-calcom`  
+  `GET https://cgf.one22.me/api/cron/schedule-calcom`  
   Same header. Creates 5 workout slots (Mon–Fri 12:00 AEDT) in Cal.com.
 
 ### Cal.com cancellation webhook
@@ -88,7 +88,7 @@ Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 
 If you cancel a workout meeting in Cal.com, the app can send you a Telegram reminder to rebook:
 
 1. In Cal.com go to **Settings → Developer → Webhooks**.
-2. Add a webhook: **Subscriber URL** = `https://your-app.com/api/webhooks/calcom`, **Event trigger** = **Booking Cancelled**.
+2. Add a webhook: **Subscriber URL** = `https://cgf.one22.me/api/webhooks/calcom`, **Event trigger** = **Booking Cancelled**.
 3. (Optional) Set a **Secret** in Cal.com and the same value as `CALCOM_WEBHOOK_SECRET` in your app env.
 
 The reminder is sent only for the workout event type and only to users who have linked Telegram (matched by attendee email).
@@ -96,7 +96,7 @@ The reminder is sent only for the workout event type and only to users who have 
 ## Telegram
 
 1. Create a bot with [@BotFather](https://t.me/BotFather), set `TELEGRAM_BOT_TOKEN`.
-2. Set webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://your-app.com/api/telegram/webhook`
+2. Set webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://cgf.one22.me/api/telegram/webhook`
 3. In the app: Settings → Link Telegram, then in Telegram send `/link YOUR_CODE`.
 
 Commands: `/status`, `/done`, `/weight 81.5`, `/punishment`, `/skip`.
