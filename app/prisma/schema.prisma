@@ -1,0 +1,207 @@
+// ChristianGetsFit - PostgreSQL schema per plan
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  telegramChatId        String?   @map("telegram_chat_id")
+  telegramLinkCode      String?   @map("telegram_link_code")
+  heightCm              Int?      @map("height_cm")
+  startingWeight        Float?    @map("starting_weight") // 82kg
+  currentWeight         Float?    @map("current_weight")
+  targetWeight          Float?    @map("target_weight")   // 75kg
+  goalStartedAt         DateTime? @map("goal_started_at")
+  fitbitAccessToken     String?   @map("fitbit_access_token")
+  fitbitRefreshToken    String?   @map("fitbit_refresh_token")
+  fitbitTokenExpiresAt  DateTime? @map("fitbit_token_expires_at")
+  calcomApiKey          String?   @map("calcom_api_key")
+  notificationPrefs    Json?     @map("notification_preferences") // { telegram: true, email: true }
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  magicLinkTokens       MagicLinkToken[]
+  weightLogs            WeightLog[]
+  waistLogs             WaistLog[]
+  weightMilestones      WeightMilestone[]
+  workouts              Workout[]
+  achievements         Achievement[]
+  weeklyStats           WeeklyStat[]
+  fitbitDaily           FitbitDaily[]
+  exercisePreferences   ExercisePreference[]
+  injuries              Injury[]
+}
+
+model MagicLinkToken {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  email     String
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WeightLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  weightKg  Float    @map("weight_kg")
+  loggedAt  DateTime @default(now()) @map("logged_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+}
+
+model WaistLog {
+  id       String   @id @default(cuid())
+  userId   String   @map("user_id")
+  waistCm  Float    @map("waist_cm")
+  loggedAt DateTime @default(now()) @map("logged_at")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+}
+
+model WeightMilestone {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  milestoneType String   @map("milestone_type") // first_drop, 25%, 50%, 75%, goal
+  targetKg     Float     @map("target_kg")
+  achievedAt  DateTime  @default(now()) @map("achieved_at")
+  xpAwarded   Int       @map("xp_awarded")
+  celebrated  Boolean   @default(false)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workout {
+  id                 String    @id @default(cuid())
+  userId              String    @map("user_id")
+  workoutType         String    @map("workout_type") // A, B, C
+  isExpress           Boolean   @default(false) @map("is_express")
+  scheduledAt        DateTime?  @map("scheduled_at")
+  completedAt        DateTime?  @map("completed_at")
+  fitbitVerified      Boolean   @default(false) @map("fitbit_verified")
+  durationMins       Int?      @map("duration_mins")
+  exercisesCompleted Json?     @map("exercises_completed") // snapshot of exercise IDs and order
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseLogs       ExerciseLog[]
+
+  @@index([userId, completedAt])
+}
+
+model Exercise {
+  id                   String    @id @default(cuid())
+  name                  String
+  muscleGroup           String   @map("muscle_group")
+  equipment             String   // smith_machine | dumbbell
+  demoGifUrl            String?  @map("demo_gif_url")
+  videoUrl              String?  @map("video_url")   // YouTube "how to" link
+  instructions         String?
+  baseWeightPercent     Float    @map("base_weight_percent") // e.g. 0.30 for 30% bodyweight
+  weightIncrementKg     Float    @map("weight_increment_kg") // 2.5 smith, 1 dumbbell
+  substituteExerciseIds String[] @map("substitute_exercise_ids") // for blacklist swaps
+  warmUpOrder           Int?     @map("warm_up_order") // for warm-up routine, null = not warm-up
+  workoutType          String?  @map("workout_type") // A, B, C - null for warm-up
+  orderInWorkout       Int      @map("order_in_workout") // 0-based order
+  sets                 Int      @default(3)
+  repsMin              Int      @map("reps_min")
+  repsMax              Int      @map("reps_max")
+  restSecs             Int      @map("rest_secs")
+  isWarmUp             Boolean  @default(false) @map("is_warm_up")
+  injuryAreasToSkip    String[] @map("injury_areas_to_skip") // if user has injury here, substitute
+  exerciseLogs         ExerciseLog[]
+  preferences          ExercisePreference[]
+}
+
+model ExerciseLog {
+  id                 String   @id @default(cuid())
+  workoutId          String   @map("workout_id")
+  exerciseId         String   @map("exercise_id")
+  setsCompleted      Int      @map("sets_completed")
+  repsPerSet         Int[]    @map("reps_per_set")
+  weightKg           Float    @map("weight_kg")
+  notes              String?
+  isPr               Boolean  @default(false) @map("is_pr")
+  difficultyFeedback String?  @map("difficulty_feedback") // too_light | just_right | too_heavy
+  enjoyed            Boolean? // null = no feedback
+  workout            Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise           Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([workoutId])
+}
+
+model ExercisePreference {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  exerciseId            String    @map("exercise_id")
+  blacklisted           Boolean   @default(false)
+  currentWeightKg       Float?    @map("current_weight_kg")
+  sessionsAtCurrentWeight Int     @default(0) @map("sessions_at_current_weight")
+  totalSessions         Int       @default(0) @map("total_sessions")
+  lastPerformedAt       DateTime? @map("last_performed_at")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise              Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseId])
+  @@index([userId])
+}
+
+model Achievement {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  achievementType String   @map("achievement_type")
+  unlockedAt      DateTime @default(now()) @map("unlocked_at")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WeeklyStat {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  weekStart          DateTime @map("week_start")
+  workoutsCompleted  Int      @map("workouts_completed")
+  punishmentActive   Boolean  @default(false) @map("punishment_active")
+  xpEarned           Int      @default(0) @map("xp_earned")
+  questsCompleted    Int      @default(0) @map("quests_completed")
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+}
+
+model FitbitDaily {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  date                  DateTime @db.Date
+  sleepScore            Float?   @map("sleep_score")
+  sleepDurationMins     Int?     @map("sleep_duration_mins")
+  restingHr             Int?     @map("resting_hr")
+  steps                 Int?
+  activeMinutes         Int?     @map("active_minutes")
+  recoveryRecommendation String? @map("recovery_recommendation") // rest | normal | push
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+model Injury {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  bodyArea   String    @map("body_area") // shoulder, back, knee, wrist, elbow, hip, neck, other
+  severity   String    // mild, moderate, bad
+  startedAt  DateTime  @default(now()) @map("started_at")
+  resolvedAt DateTime? @map("resolved_at")
+  notes      String?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

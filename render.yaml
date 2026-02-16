@@ -1,0 +1,25 @@
+# Render: create a Web Service and PostgreSQL from dashboard, or use blueprint.
+# https://render.com/docs/blueprint-spec
+databases:
+  - name: christian-gets-fit-db
+    plan: free
+
+services:
+  - type: web
+    name: christian-gets-fit
+    runtime: node
+    rootDir: app
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma db push && npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: christian-gets-fit-db
+          property: connectionString
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
