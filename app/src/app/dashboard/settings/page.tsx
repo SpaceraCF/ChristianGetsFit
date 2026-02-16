@@ -10,11 +10,19 @@ function SettingsPageInner() {
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fitbitMsg, setFitbitMsg] = useState<string | null>(null);
+  const [fitbitLinked, setFitbitLinked] = useState(false);
+  const [telegramLinked, setTelegramLinked] = useState(false);
 
   useEffect(() => {
     const fitbit = searchParams.get("fitbit");
-    if (fitbit === "ok") setFitbitMsg("Fitbit linked.");
+    if (fitbit === "ok") setFitbitMsg("Fitbit linked successfully!");
     if (fitbit === "error") setFitbitMsg("Fitbit link failed.");
+    fetch("/api/settings/status").then(r => r.ok ? r.json() : null).then(d => {
+      if (d) {
+        setFitbitLinked(d.fitbitLinked);
+        setTelegramLinked(d.telegramLinked);
+      }
+    });
   }, [searchParams]);
 
   async function handleLinkTelegram() {
@@ -40,13 +48,19 @@ function SettingsPageInner() {
           </p>
         </CardHeader>
         <CardContent className="space-y-2">
+          {telegramLinked && !linkCode && (
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-sm text-green-600 font-medium">Connected</span>
+            </div>
+          )}
           {linkCode ? (
             <p className="text-sm font-mono bg-muted p-3 rounded">
               In Telegram, send: <strong>/link {linkCode}</strong>
             </p>
           ) : (
-            <Button onClick={handleLinkTelegram} disabled={loading}>
-              {loading ? "Generating…" : "Link Telegram"}
+            <Button onClick={handleLinkTelegram} disabled={loading} variant={telegramLinked ? "ghost" : "default"} size={telegramLinked ? "sm" : "default"}>
+              {loading ? "Generating…" : telegramLinked ? "Relink" : "Link Telegram"}
             </Button>
           )}
         </CardContent>
@@ -69,13 +83,26 @@ function SettingsPageInner() {
         <CardHeader>
           <CardTitle className="text-base">Fitbit</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Link Fitbit to verify workouts with heart rate and use rest-day suggestions.
+            {fitbitLinked
+              ? "Fitbit is linked. Heart rate verification and rest-day suggestions are active."
+              : "Link Fitbit to verify workouts with heart rate and use rest-day suggestions."}
           </p>
         </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline">
-            <a href="/api/fitbit/auth">Link Fitbit</a>
-          </Button>
+        <CardContent className="space-y-2">
+          {fitbitLinked ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-sm text-green-600 font-medium">Connected</span>
+              <Button asChild variant="ghost" size="sm" className="ml-auto">
+                <a href="/api/fitbit/auth">Relink</a>
+              </Button>
+            </div>
+          ) : (
+            <Button asChild variant="outline">
+              <a href="/api/fitbit/auth">Link Fitbit</a>
+            </Button>
+          )}
+          {fitbitMsg && <p className="text-sm text-muted-foreground">{fitbitMsg}</p>}
         </CardContent>
       </Card>
 
