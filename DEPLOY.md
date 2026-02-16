@@ -11,26 +11,38 @@
 
 5. Click **Apply** to create the resources.
 
-## 2. Environment variables
+## 2. Google OAuth setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a project (or use existing).
+3. **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**.
+4. Application type: **Web application**.
+5. Authorized redirect URIs: `https://your-app.onrender.com/api/auth/google/callback`
+   (and `http://localhost:3000/api/auth/google/callback` for local dev).
+6. Copy the **Client ID** and **Client Secret**.
+
+## 3. Environment variables
 
 In the **Web Service** → **Environment** tab, add (or edit):
 
 | Key | Value |
 |-----|--------|
-| `APP_URL` | `https://christian-gets-fit.onrender.com` (or your service URL from Render) |
+| `APP_URL` | `https://christian-gets-fit.onrender.com` (or your service URL) |
 | `NEXTAUTH_SECRET` | Use the one Render generated, or set your own long random string |
 | `CRON_SECRET` | Use the one Render generated, or set your own (for cron endpoints) |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
 
-Optional (add when you’re ready):
+Optional (add when you're ready):
 
-- `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL` – magic link login
-- `TELEGRAM_BOT_TOKEN` – Telegram bot
-- `CALCOM_API_KEY`, `CALCOM_USERNAME`, `CALCOM_EVENT_TYPE_SLUG`, `CALCOM_WEBHOOK_SECRET` – Cal.com
-- `FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET` – Fitbit
+- `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL` -- notification emails
+- `TELEGRAM_BOT_TOKEN` -- Telegram bot
+- `CALCOM_API_KEY`, `CALCOM_USERNAME`, `CALCOM_EVENT_TYPE_SLUG`, `CALCOM_WEBHOOK_SECRET` -- Cal.com
+- `FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET` -- Fitbit
 
 `DATABASE_URL` is set automatically from the linked PostgreSQL database.
 
-## 3. First deploy and seed
+## 4. First deploy and seed
 
 1. Let the first deploy finish (Build + Start).
 2. Open the **Shell** tab for the Web Service (or use **Dashboard** → your service → **Shell**).
@@ -38,9 +50,9 @@ Optional (add when you’re ready):
    ```bash
    cd app && npx prisma db push && npx tsx prisma/seed.ts
    ```
-4. Open your app URL (e.g. `https://christian-gets-fit.onrender.com`). You should see the app; the first user in the DB is used when there’s no session.
+4. Open your app URL. Sign in with Google.
 
-## 4. Cron jobs (optional)
+## 5. Cron jobs (optional)
 
 Use [Render Cron Jobs](https://render.com/docs/cron-jobs) or an external scheduler (e.g. cron-job.org) to call:
 
@@ -52,13 +64,13 @@ Use [Render Cron Jobs](https://render.com/docs/cron-jobs) or an external schedul
 
 See **README.md** for suggested times (e.g. Monday 00:00 AEDT for schedule-calcom).
 
-## 5. Cal.com webhook (optional)
+## 6. Cal.com webhook (optional)
 
 In Cal.com: **Settings → Developer → Webhooks** → Subscriber URL:  
 `https://your-app.onrender.com/api/webhooks/calcom`  
 Trigger: **Booking Cancelled**. Set the same secret as `CALCOM_WEBHOOK_SECRET` in Render env.
 
-## 6. Telegram webhook
+## 7. Telegram webhook
 
 After setting `TELEGRAM_BOT_TOKEN`, set the Telegram webhook:
 

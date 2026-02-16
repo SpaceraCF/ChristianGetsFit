@@ -10,7 +10,7 @@ Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 
 ## Stack
 
 - **App**: Next.js 16 (App Router), TypeScript, Tailwind CSS, Prisma, PostgreSQL
-- **Auth**: Magic link (SendGrid)
+- **Auth**: Google OAuth (sign in with Google)
 - **Integrations**: Telegram, Cal.com, Fitbit, SendGrid
 
 ## Setup
@@ -27,8 +27,10 @@ Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 
 
    - `DATABASE_URL` – PostgreSQL connection string
    - `NEXTAUTH_SECRET` – random secret for sessions
-   - `SENDGRID_API_KEY` (optional) – for magic link emails
-   - `SENDGRID_FROM_EMAIL` – verified sender
+   - `GOOGLE_CLIENT_ID` – from Google Cloud Console (OAuth 2.0 credentials)
+   - `GOOGLE_CLIENT_SECRET` – from Google Cloud Console
+   - `SENDGRID_API_KEY` (optional) – for notification emails
+   - `SENDGRID_FROM_EMAIL` (optional) – verified sender
    - `TELEGRAM_BOT_TOKEN` (optional) – for Telegram bot
    - `CALCOM_API_KEY` (optional) – for calendar and scheduling
    - `CALCOM_USERNAME` – your Cal.com username (for scheduling 5 slots/week)
@@ -101,7 +103,7 @@ Commands: `/status`, `/done`, `/weight 81.5`, `/punishment`, `/skip`.
 
 ## Features
 
-- Magic link login, dashboard with weight goal and weekly workout count
+- Google OAuth login, dashboard with weight goal and weekly workout count
 - Workouts A/B/C (Push, Pull, Legs) + express (3 exercises)
 - Warm-up, recommended weights, difficulty/enjoyment feedback, exercise blacklist
 - Weight and waist logging, analytics charts

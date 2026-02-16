@@ -53,20 +53,10 @@ export async function clearSession(): Promise<void> {
   cookieStore.delete(COOKIE_NAME);
 }
 
-/** When no session, use first user in DB (login page removed for now). */
-async function getDefaultUser() {
-  return prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-}
-
 export async function getUserOrNull() {
   const session = await getSession();
-  if (session) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-    });
-    if (user) return user;
-  }
-  return getDefaultUser();
+  if (!session) return null;
+  return prisma.user.findUnique({ where: { id: session.id } });
 }
 
 export async function requireUser() {

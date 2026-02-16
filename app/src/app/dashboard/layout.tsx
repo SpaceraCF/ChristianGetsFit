@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getSession();
+  if (!session) redirect("/");
 
   return (
     <div className="min-h-screen bg-background">
@@ -25,6 +29,9 @@ export default function DashboardLayout({
           <Link href="/dashboard/settings" className="text-muted-foreground hover:text-foreground">
             Settings
           </Link>
+          <a href="/api/auth/logout" className="text-muted-foreground hover:text-foreground">
+            Logout
+          </a>
         </nav>
       </header>
       <main className="p-4 pb-20">{children}</main>
