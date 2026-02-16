@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,7 @@ type ExerciseItem = {
   videoUrl: string | null;
 };
 
-export default function DoWorkoutPage() {
+function DoWorkoutPageInner() {
   const searchParams = useSearchParams();
   const type = searchParams.get("type") ?? "A";
   const express = searchParams.get("express") === "true";
@@ -398,5 +398,13 @@ export default function DoWorkoutPage() {
     <div className="max-w-lg mx-auto">
       <Button asChild><Link href="/dashboard/workout">Back</Link></Button>
     </div>
+  );
+}
+
+export default function DoWorkoutPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><p className="text-muted-foreground">Loading…</p></div>}>
+      <DoWorkoutPageInner />
+    </Suspense>
   );
 }
