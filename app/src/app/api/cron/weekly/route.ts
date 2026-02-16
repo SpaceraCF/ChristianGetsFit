@@ -15,9 +15,12 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
-  const day = now.getDay();
-  if (day !== 0) {
-    return NextResponse.json({ ok: true, message: "Only run on Sunday" });
+  const aedtDay = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Sydney",
+    weekday: "short",
+  }).format(now);
+  if (aedtDay !== "Sun") {
+    return NextResponse.json({ ok: true, message: `Only run on Sunday (AEDT: ${aedtDay})` });
   }
 
   const users = await prisma.user.findMany({

@@ -1,5 +1,13 @@
 # Render: create a Web Service and PostgreSQL from dashboard, or use blueprint.
 # https://render.com/docs/blueprint-spec
+#
+# CRON SETUP (free tier — use external cron service):
+# Go to https://cron-job.org (free) and create these jobs:
+#   Every 15 min:  GET https://cgf.one22.me/api/cron/tick  Header: Authorization: Bearer <CRON_SECRET>
+#   Daily at 13:00 UTC (midnight AEDT): GET https://cgf.one22.me/api/cron/fitbit-sync  Header: Authorization: Bearer <CRON_SECRET>
+#   Sunday 13:00 UTC (midnight Mon AEDT): GET https://cgf.one22.me/api/cron/schedule-calcom  Header: Authorization: Bearer <CRON_SECRET>
+#   Sunday 13:00 UTC: GET https://cgf.one22.me/api/cron/weekly  Header: Authorization: Bearer <CRON_SECRET>
+#
 databases:
   - name: christian-gets-fit-db
     plan: free

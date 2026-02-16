@@ -123,6 +123,18 @@ function SettingsPageInner() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Notifications</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Daily Telegram messages: 7am inspiration, pre-workout pump-up, 11am reminder, 3pm last call, 6pm summary.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <TestCronButton />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Profile</CardTitle>
         </CardHeader>
         <CardContent>
@@ -204,6 +216,36 @@ function CalComScheduleButton() {
           </ul>
         </details>
       )}
+    </div>
+  );
+}
+
+function TestCronButton() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  async function fire() {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/cron/test", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setResult(`Sent! (AEDT: ${data.aedtTime})`);
+      } else {
+        setResult(data.error ?? "Failed");
+      }
+    } catch (e) {
+      setResult("Error: " + String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <div className="space-y-1">
+      <Button onClick={fire} disabled={loading} variant="outline" size="sm">
+        {loading ? "Sending…" : "Send test message"}
+      </Button>
+      {result && <p className="text-xs text-muted-foreground">{result}</p>}
     </div>
   );
 }
