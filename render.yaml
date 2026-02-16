@@ -1,25 +1,20 @@
-# Render: create a Web Service and PostgreSQL from dashboard, or use blueprint.
+# ChristianGetsFit — Render Blueprint
+# Starter tier: ~$16/month (web $7 + DB $6 + 2 cron jobs ~$2 + minimal runtime)
 # https://render.com/docs/blueprint-spec
-#
-# CRON SETUP (free tier — use external cron service):
-# Go to https://cron-job.org (free) and create these jobs:
-#   Every 15 min:  GET https://cgf.one22.me/api/cron/tick  Header: Authorization: Bearer <CRON_SECRET>
-#   Daily at 13:00 UTC (midnight AEDT): GET https://cgf.one22.me/api/cron/fitbit-sync  Header: Authorization: Bearer <CRON_SECRET>
-#   Sunday 13:00 UTC (midnight Mon AEDT): GET https://cgf.one22.me/api/cron/schedule-calcom  Header: Authorization: Bearer <CRON_SECRET>
-#   Sunday 13:00 UTC: GET https://cgf.one22.me/api/cron/weekly  Header: Authorization: Bearer <CRON_SECRET>
-#
+
 databases:
   - name: christian-gets-fit-db
-    plan: free
+    plan: basic-256mb
 
 services:
   - type: web
     name: christian-gets-fit
     runtime: node
     rootDir: app
-    plan: free
+    plan: starter
     buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npx prisma db push && npm run start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: "20"
@@ -31,3 +26,53 @@ services:
         generateValue: true
       - key: CRON_SECRET
         generateValue: true
+      - key: APP_URL
+        value: https://cgf.one22.me
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: CALCOM_API_KEY
+        sync: false
+      - key: CALCOM_USERNAME
+        sync: false
+      - key: CALCOM_EVENT_TYPE_SLUG
+        value: workout
+      - key: FITBIT_CLIENT_ID
+        sync: false
+      - key: FITBIT_CLIENT_SECRET
+        sync: false
+
+  # Every 15 min: notifications (7am, pre-workout, 11am, 3pm, 6pm AEDT)
+  - type: cron
+    name: cgf-tick
+    runtime: docker
+    dockerfilePath: ./cron/Dockerfile
+    dockerContext: ./cron
+    plan: starter
+    schedule: "*/15 * * * *"
+    envVars:
+      - key: CRON_MODE
+        value: tick
+      - key: APP_URL
+        value: https://cgf.one22.me
+      - key: CRON_SECRET
+        sync: false
+
+  # Daily at 13:00 UTC (midnight AEDT): Fitbit sync, Cal.com scheduling, weekly recap
+  - type: cron
+    name: cgf-daily
+    runtime: docker
+    dockerfilePath: ./cron/Dockerfile
+    dockerContext: ./cron
+    plan: starter
+    schedule: "0 13 * * *"
+    envVars:
+      - key: CRON_MODE
+        value: daily
+      - key: APP_URL
+        value: https://cgf.one22.me
+      - key: CRON_SECRET
+        sync: false
