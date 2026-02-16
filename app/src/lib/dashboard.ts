@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/db";
-import { startOfWeek, subWeeks } from "date-fns";
+import { startOfWeek, subWeeks, differenceInWeeks } from "date-fns";
 import { MIN_WORKOUTS_FOR_GOAL, PLANNED_WORKOUTS_PER_WEEK } from "@/lib/config";
 
 export async function getDashboardStats(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { currentWeight: true, startingWeight: true, targetWeight: true },
+    select: { currentWeight: true, startingWeight: true, targetWeight: true, goalStartedAt: true, fitbitAccessToken: true },
   });
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -63,6 +63,46 @@ export async function getDashboardStats(userId: string) {
   const count = weekStat?.workoutsCompleted ?? workoutsThisWeek;
   const punishmentActive = count < MIN_WORKOUTS_FOR_GOAL && now >= weekStart;
 
+  const currentWeight = user?.currentWeight ?? user?.startingWeight ?? 82;
+  const startingWeight = user?.startingWeight ?? 82;
+  const targetWeight = user?.targetWeight ?? 75;
+
+  // Recovery status from latest Fitbit daily data
+  let recoveryStatus: "well_rested" | "take_it_easy" | "normal" | null = null;
+  if (user?.fitbitAccessToken) {
+    const latest = await prisma.fitbitDaily.findFirst({
+      where: { userId },
+      orderBy: { date: "desc" },
+      select: { recoveryRecommendation: true },
+    });
+    if (latest?.recoveryRecommendation === "push") recoveryStatus = "well_rested";
+    else if (latest?.recoveryRecommendation === "rest") recoveryStatus = "take_it_easy";
+    else if (latest?.recoveryRecommendation === "normal") recoveryStatus = "normal";
+  }
+
+  // Projected goal date
+  let projectedWeeksLeft: number | null = null;
+  const totalToLose = startingWeight - targetWeight;
+  const lost = startingWeight - currentWeight;
+  if (lost > 0 && user?.goalStartedAt) {
+    const weeksElapsed = Math.max(1, differenceInWeeks(now, user.goalStartedAt));
+    const ratePerWeek = lost / weeksElapsed;
+    const remaining = currentWeight - targetWeight;
+    if (remaining > 0 && ratePerWeek > 0) {
+      projectedWeeksLeft = Math.ceil(remaining / ratePerWeek);
+    }
+  }
+
+  // Next milestone
+  const milestones = [
+    { type: "first_drop", target: startingWeight - 1, label: "First Kilo Down" },
+    { type: "25%", target: startingWeight - totalToLose * 0.25, label: "25% There" },
+    { type: "halfway", target: startingWeight - totalToLose * 0.5, label: "Halfway" },
+    { type: "75%", target: startingWeight - totalToLose * 0.75, label: "75% There" },
+    { type: "goal", target: targetWeight, label: "GOAL" },
+  ];
+  const nextMilestone = milestones.find((m) => currentWeight > m.target) ?? null;
+
   return {
     workoutsThisWeek: count,
     plannedWorkoutsPerWeek: PLANNED_WORKOUTS_PER_WEEK,
@@ -72,8 +112,11 @@ export async function getDashboardStats(userId: string) {
     level,
     streak,
     nextWorkoutType,
-    currentWeight: user?.currentWeight ?? user?.startingWeight ?? 82,
-    targetWeight: user?.targetWeight ?? 75,
-    startingWeight: user?.startingWeight ?? 82,
+    currentWeight,
+    targetWeight,
+    startingWeight,
+    recoveryStatus,
+    projectedWeeksLeft,
+    nextMilestone: nextMilestone ? { label: nextMilestone.label, targetKg: Math.round(nextMilestone.target * 10) / 10 } : null,
   };
 }

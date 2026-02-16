@@ -170,15 +170,22 @@ function FitbitSyncButton() {
 function CalComScheduleButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[] | null>(null);
   async function schedule() {
     setLoading(true);
     setMessage(null);
+    setErrors(null);
     try {
       const res = await fetch("/api/calcom/schedule-week", { method: "POST" });
       const data = await res.json();
-      if (data.created != null)
-        setMessage(data.message ?? `Created ${data.created}/5 slots.`);
-      else setMessage(data.error ?? "Failed");
+      if (data.created != null) {
+        setMessage(data.message ?? `Created ${data.created} slots.`);
+      } else {
+        setMessage(data.error ?? "Failed");
+      }
+      if (data.errors?.length) {
+        setErrors(data.errors);
+      }
     } finally {
       setLoading(false);
     }
@@ -186,9 +193,17 @@ function CalComScheduleButton() {
   return (
     <div className="space-y-2">
       <Button onClick={schedule} disabled={loading}>
-        {loading ? "Scheduling…" : "Schedule this week's 5 workouts"}
+        {loading ? "Scheduling…" : "Schedule this week's workouts"}
       </Button>
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
+      {errors && (
+        <details className="text-xs text-destructive">
+          <summary className="cursor-pointer">Show errors ({errors.length})</summary>
+          <ul className="mt-1 space-y-1 pl-4 list-disc">
+            {errors.map((e, i) => <li key={i} className="break-all">{e}</li>)}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

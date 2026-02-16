@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, ReferenceLine, PieChart, Pie, Cell, AreaChart, Area, Legend,
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type Analytics = {
-  weightTrend: Array<{ date: string; weight: number }>;
+  weightTrend: Array<{ date: string; weight: number; ma: number }>;
   waistTrend: Array<{ date: string; waist: number }>;
   workoutsPerWeek: Array<{ week: string; total: number; A: number; B: number; C: number }>;
   workoutTypes: Array<{ name: string; value: number; fill: string }>;
@@ -19,31 +19,39 @@ type Analytics = {
     sleepMins: number | null; sleepScore: number | null; activeMinutes: number | null;
   }>;
   fitbitLinked: boolean;
+  heatmap: Array<{ date: string; count: number }>;
+  milestoneAnnotations: Array<{ date: string; label: string; weight: number }>;
   stats: {
     totalWorkouts: number; currentWeight: number; targetWeight: number;
     startingWeight: number; weightLost: number; progressPct: number; streak: number;
+    projectedWeeksLeft: number | null;
   };
 };
 
 const COLORS = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#ec4899"];
+const RANGES = ["1W", "1M", "3M", "6M", "1Y"] as const;
+type Range = typeof RANGES[number];
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "strength" | "fitbit">("overview");
+  const [range, setRange] = useState<Range>("3M");
+
+  const fetchData = useCallback((r: Range) => {
+    return fetch(`/api/analytics?range=${r}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => setData(d));
+  }, []);
 
   function refreshData() {
-    fetch("/api/analytics")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setData(d));
+    fetchData(range);
   }
 
   useEffect(() => {
-    fetch("/api/analytics")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setData(d))
-      .finally(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    fetchData(range).finally(() => setLoading(false));
+  }, [range, fetchData]);
 
   if (loading) {
     return (
@@ -75,8 +83,23 @@ export default function AnalyticsPage() {
         <SummaryCard
           label="Progress"
           value={`${stats.progressPct}%`}
-          sub={`${stats.currentWeight}kg / ${stats.targetWeight}kg`}
+          sub={stats.projectedWeeksLeft != null ? `~${stats.projectedWeeksLeft}w to goal` : `${stats.currentWeight}kg / ${stats.targetWeight}kg`}
         />
+      </div>
+
+      {/* Time range selector */}
+      <div className="flex gap-1 bg-muted rounded-lg p-1">
+        {RANGES.map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+              range === r ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {r}
+          </button>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -113,15 +136,68 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
   );
 }
 
+/* ─── Heatmap ─── */
+function WorkoutHeatmap({ data }: { data: Array<{ date: string; count: number }> }) {
+  const weeks: Array<Array<{ date: string; count: number }>> = [];
+  let week: Array<{ date: string; count: number }> = [];
+  for (const d of data) {
+    const dayOfWeek = new Date(d.date).getDay();
+    if (dayOfWeek === 1 && week.length > 0) {
+      weeks.push(week);
+      week = [];
+    }
+    week.push(d);
+  }
+  if (week.length > 0) weeks.push(week);
+
+  const getColor = (count: number) => {
+    if (count === 0) return "bg-muted";
+    if (count === 1) return "bg-green-300";
+    return "bg-green-500";
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Workout heatmap</CardTitle>
+        <p className="text-sm text-muted-foreground">Last 52 weeks</p>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-[2px] overflow-x-auto pb-2">
+          {weeks.map((w, wi) => (
+            <div key={wi} className="flex flex-col gap-[2px]">
+              {w.map((d) => (
+                <div
+                  key={d.date}
+                  className={`w-[10px] h-[10px] rounded-[2px] ${getColor(d.count)}`}
+                  title={`${d.date}: ${d.count} workout${d.count !== 1 ? "s" : ""}`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+          <span>Less</span>
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-muted" />
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-green-300" />
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-green-500" />
+          <span>More</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function OverviewTab({ data }: { data: Analytics }) {
   return (
     <div className="space-y-6">
-      {/* Weight trend */}
+      {/* Weight trend with moving average */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Weight trend</CardTitle>
           <p className="text-sm text-muted-foreground">
             {data.stats.startingWeight}kg &rarr; {data.stats.targetWeight}kg goal
+            {data.stats.projectedWeeksLeft != null && ` · ~${data.stats.projectedWeeksLeft} weeks to go`}
           </p>
         </CardHeader>
         <CardContent>
@@ -141,8 +217,13 @@ function OverviewTab({ data }: { data: Analytics }) {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis domain={["dataMin - 1", "dataMax + 1"]} tick={{ fontSize: 11 }} />
                   <Tooltip contentStyle={{ borderRadius: 8, fontSize: 13 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                   <ReferenceLine y={data.stats.targetWeight} stroke="#10b981" strokeDasharray="4 4" label={{ value: "Goal", fontSize: 11 }} />
-                  <Area type="monotone" dataKey="weight" stroke="#0ea5e9" strokeWidth={2} fill="url(#weightGrad)" dot={{ r: 3, fill: "#0ea5e9" }} />
+                  {data.milestoneAnnotations.map((m, i) => (
+                    <ReferenceLine key={i} y={m.weight} stroke="#f59e0b" strokeDasharray="2 2" label={{ value: m.label, fontSize: 9, fill: "#f59e0b" }} />
+                  ))}
+                  <Area type="monotone" dataKey="weight" stroke="#0ea5e9" strokeWidth={2} fill="url(#weightGrad)" dot={{ r: 3, fill: "#0ea5e9" }} name="Weight" />
+                  <Line type="monotone" dataKey="ma" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="7-day avg" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -170,6 +251,7 @@ function OverviewTab({ data }: { data: Analytics }) {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis domain={["dataMin - 1", "dataMax + 1"]} tick={{ fontSize: 11 }} />
                   <Tooltip contentStyle={{ borderRadius: 8, fontSize: 13 }} />
+                  <ReferenceLine y={90} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Healthy <90", fontSize: 10 }} />
                   <Area type="monotone" dataKey="waist" stroke="#8b5cf6" strokeWidth={2} fill="url(#waistGrad)" dot={{ r: 3, fill: "#8b5cf6" }} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -178,7 +260,10 @@ function OverviewTab({ data }: { data: Analytics }) {
         </Card>
       )}
 
-      {/* Workouts per week - stacked */}
+      {/* Workout heatmap */}
+      <WorkoutHeatmap data={data.heatmap} />
+
+      {/* Workouts per week */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Workouts per week</CardTitle>

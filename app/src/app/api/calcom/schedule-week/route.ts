@@ -30,12 +30,16 @@ export async function POST() {
       username,
       eventTypeSlug,
       attendeeEmail: user.email,
+      attendeeName: user.email.split("@")[0],
     });
 
     return NextResponse.json({
       created: result.created,
+      total: 5,
       errors: result.errors.length ? result.errors : undefined,
-      message: `Created ${result.created}/5 workout slots in your calendar (12:00 AEDT Mon–Fri).`,
+      message: result.created > 0
+        ? `Created ${result.created} workout slots in your calendar (12:00 AEDT).`
+        : `Failed to create slots. ${result.errors[0] ?? "Check Cal.com config."}`,
     });
   } catch (e) {
     console.error("[Cal.com schedule-week]", e);

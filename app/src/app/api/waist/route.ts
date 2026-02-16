@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { checkAndAwardAchievements } from "@/lib/gamification";
+import { awardQuestXp } from "@/lib/quests";
 
 const bodySchema = z.object({ waistCm: z.number().min(50).max(200) });
 
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
       data: { userId: user.id, waistCm: body.waistCm },
     });
     await checkAndAwardAchievements(user.id, "waist");
+    await awardQuestXp(user.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {

@@ -20,6 +20,61 @@ type ExerciseItem = {
   videoUrl: string | null;
 };
 
+function getYouTubeEmbedId(url: string): string | null {
+  const patterns = [
+    /youtu\.be\/([^?&]+)/,
+    /youtube\.com\/watch\?v=([^&]+)/,
+    /youtube\.com\/embed\/([^?&]+)/,
+    /youtube\.com\/shorts\/([^?&]+)/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function VideoEmbed({ videoUrl, name }: { videoUrl: string | null; name: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const embedId = videoUrl ? getYouTubeEmbedId(videoUrl) : null;
+
+  if (embedId) {
+    return (
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="text-sm text-primary underline"
+        >
+          {expanded ? "Hide video" : "Watch how to do this"}
+        </button>
+        {expanded && (
+          <div className="relative w-full pb-[56.25%] rounded-lg overflow-hidden bg-black">
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src={`https://www.youtube.com/embed/${embedId}?rel=0`}
+              title={`How to: ${name}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={videoUrl ?? `https://www.youtube.com/results?search_query=${encodeURIComponent(name + " form")}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-sm text-primary underline"
+    >
+      {videoUrl ? "Watch how (YouTube)" : "Search YouTube for form"}
+    </a>
+  );
+}
+
 function DoWorkoutPageInner() {
   const searchParams = useSearchParams();
   const type = searchParams.get("type") ?? "A";
@@ -250,25 +305,7 @@ function DoWorkoutPageInner() {
             {currentWarmUp.instructions && (
               <p className="text-sm text-muted-foreground">{currentWarmUp.instructions}</p>
             )}
-            {currentWarmUp.videoUrl ? (
-              <a
-                href={currentWarmUp.videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline"
-              >
-                Watch how (YouTube)
-              </a>
-            ) : (
-              <a
-                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(currentWarmUp.name + " form")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline"
-              >
-                Search YouTube for form
-              </a>
-            )}
+            <VideoEmbed videoUrl={currentWarmUp.videoUrl} name={currentWarmUp.name} />
             <div className="flex gap-2">
               <Button onClick={handleNextWarmUp} className="flex-1">
                 Done
@@ -337,25 +374,7 @@ function DoWorkoutPageInner() {
               Recommended: {currentExercise.recommendedWeightKg}kg · Sets: {currentExercise.sets} × {currentExercise.repsMin}
               –{currentExercise.repsMax} reps
             </p>
-            {currentExercise.videoUrl ? (
-              <a
-                href={currentExercise.videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline"
-              >
-                Watch how (YouTube)
-              </a>
-            ) : (
-              <a
-                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(currentExercise.name + " form")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline"
-              >
-                Search YouTube for form
-              </a>
-            )}
+            <VideoEmbed videoUrl={currentExercise.videoUrl} name={currentExercise.name} />
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">

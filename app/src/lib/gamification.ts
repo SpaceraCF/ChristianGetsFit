@@ -102,15 +102,28 @@ export async function checkAndAwardAchievements(
   if (event === "waist") {
     const logs = await prisma.waistLog.findMany({
       where: { userId },
-      orderBy: { loggedAt: "desc" },
-      take: 1,
+      orderBy: { loggedAt: "asc" },
     });
-    const current = logs[0]?.waistCm;
+    const current = logs[logs.length - 1]?.waistCm;
+    const first = logs[0]?.waistCm;
+
     if (!have.has("healthy_zone") && current != null && current < 90) {
       await prisma.achievement.create({
         data: { userId, achievementType: "healthy_zone" },
       });
       await addXp(userId, 150);
+    }
+
+    // Belt Notch: awarded for every 2cm lost from first measurement
+    if (first != null && current != null) {
+      const cmLost = first - current;
+      const beltNotchCount = Math.floor(cmLost / 2);
+      if (beltNotchCount >= 1 && !have.has("belt_notch")) {
+        await prisma.achievement.create({
+          data: { userId, achievementType: "belt_notch" },
+        });
+        await addXp(userId, 100);
+      }
     }
   }
 }

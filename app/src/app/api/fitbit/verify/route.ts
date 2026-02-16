@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { verifyWorkoutWithFitbit } from "@/lib/fitbit";
+import { startOfWeek } from "date-fns";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,11 +19,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ verified: false });
     }
     const verified = await verifyWorkoutWithFitbit(user.fitbitAccessToken, workout.completedAt);
-    if (verified) {
+    if (verified && !workout.fitbitVerified) {
       await prisma.workout.update({
         where: { id: workoutId },
         data: { fitbitVerified: true },
       });
+
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const existing = await prisma.weeklyStat.findUnique({
+        where: { userId_weekStart: { userId: user.id, weekStart } },
+      });
+      if (existing) {
+        await prisma.weeklyStat.update({
+          where: { id: existing.id },
+          data: { xpEarned: existing.xpEarned + 25 },
+        });
+      } else {
+        await prisma.weeklyStat.create({
+          data: { userId: user.id, weekStart, workoutsCompleted: 0, punishmentActive: true, xpEarned: 25 },
+        });
+      }
     }
     return NextResponse.json({ verified });
   } catch {

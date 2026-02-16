@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { startOfWeek } from "date-fns";
 import { checkAndAwardAchievements } from "@/lib/gamification";
+import { awardQuestXp } from "@/lib/quests";
 import { MIN_WORKOUTS_FOR_GOAL } from "@/lib/config";
 
 const bodySchema = z.object({
@@ -134,6 +135,7 @@ export async function POST(req: NextRequest) {
     }
 
     await checkAndAwardAchievements(user.id, "workout");
+    await awardQuestXp(user.id);
     return NextResponse.json({ ok: true, workoutId: workout.id });
   } catch (e) {
     if (e instanceof z.ZodError) {

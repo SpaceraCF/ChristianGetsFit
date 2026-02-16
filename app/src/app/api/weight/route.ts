@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { startOfWeek } from "date-fns";
 import { checkAndAwardAchievements } from "@/lib/gamification";
+import { awardQuestXp } from "@/lib/quests";
 
 const bodySchema = z.object({ weightKg: z.number().min(30).max(200) });
 
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       });
     }
     await checkAndAwardAchievements(user.id, "weight");
+    await awardQuestXp(user.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {

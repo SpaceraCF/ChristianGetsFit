@@ -1,28 +1,37 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { startOfWeek, format, subWeeks } from "date-fns";
+import { startOfWeek, format, subWeeks, subDays, differenceInWeeks } from "date-fns";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
     const userId = user.id;
 
-    const [weightLogs, waistLogs, workouts, exerciseLogs, fitbitDays] = await Promise.all([
+    const range = req.nextUrl.searchParams.get("range") ?? "3M";
+    const now = new Date();
+    const rangeStart = getRangeStart(range, now);
+
+    const [weightLogs, waistLogs, workouts, allWorkouts, exerciseLogs, fitbitDays, milestones] = await Promise.all([
       prisma.weightLog.findMany({
-        where: { userId },
+        where: { userId, loggedAt: { gte: rangeStart } },
         orderBy: { loggedAt: "asc" },
       }),
       prisma.waistLog.findMany({
-        where: { userId },
+        where: { userId, loggedAt: { gte: rangeStart } },
         orderBy: { loggedAt: "asc" },
+      }),
+      prisma.workout.findMany({
+        where: { userId, completedAt: { not: null, gte: rangeStart } },
+        orderBy: { completedAt: "asc" },
       }),
       prisma.workout.findMany({
         where: { userId, completedAt: { not: null } },
         orderBy: { completedAt: "asc" },
+        select: { completedAt: true },
       }),
       prisma.exerciseLog.findMany({
-        where: { workout: { userId } },
+        where: { workout: { userId, completedAt: { gte: rangeStart } } },
         include: {
           exercise: { select: { name: true, muscleGroup: true } },
           workout: { select: { completedAt: true } },
@@ -30,16 +39,25 @@ export async function GET() {
         orderBy: { workout: { completedAt: "asc" } },
       }),
       prisma.fitbitDaily.findMany({
-        where: { userId },
+        where: { userId, date: { gte: rangeStart } },
         orderBy: { date: "asc" },
+      }),
+      prisma.weightMilestone.findMany({
+        where: { userId },
+        orderBy: { achievedAt: "asc" },
       }),
     ]);
 
-    // Weight trend
-    const weightTrend = weightLogs.map((l) => ({
-      date: format(l.loggedAt, "MMM d"),
-      weight: l.weightKg,
-    }));
+    // Weight trend with 7-day moving average
+    const weightTrend = weightLogs.map((l, i) => {
+      const window = weightLogs.slice(Math.max(0, i - 6), i + 1);
+      const ma = window.reduce((s, w) => s + w.weightKg, 0) / window.length;
+      return {
+        date: format(l.loggedAt, "MMM d"),
+        weight: l.weightKg,
+        ma: Math.round(ma * 10) / 10,
+      };
+    });
 
     // Waist trend
     const waistTrend = waistLogs.map((l) => ({
@@ -47,7 +65,7 @@ export async function GET() {
       waist: l.waistCm,
     }));
 
-    // Workouts per week (last 12 weeks)
+    // Workouts per week (within range)
     const byWeek: Record<string, { total: number; A: number; B: number; C: number }> = {};
     for (const w of workouts) {
       const ws = startOfWeek(w.completedAt!, { weekStartsOn: 1 });
@@ -61,7 +79,7 @@ export async function GET() {
       .map(([week, data]) => ({ week, ...data }))
       .slice(-12);
 
-    // Workout type distribution (pie data)
+    // Workout type distribution
     const typeCounts = { A: 0, B: 0, C: 0 };
     for (const w of workouts) {
       const t = w.workoutType as "A" | "B" | "C";
@@ -73,7 +91,7 @@ export async function GET() {
       { name: "Legs (C)", value: typeCounts.C, fill: "#f59e0b" },
     ];
 
-    // Strength progression: top exercises by total sessions
+    // Strength progression
     const exerciseProgress: Record<string, Array<{ date: string; weight: number }>> = {};
     for (const log of exerciseLogs) {
       const name = log.exercise?.name ?? "Unknown";
@@ -84,7 +102,6 @@ export async function GET() {
         weight: log.weightKg,
       });
     }
-    // Top 6 exercises by frequency
     const topExercises = Object.entries(exerciseProgress)
       .sort((a, b) => b[1].length - a[1].length)
       .slice(0, 6)
@@ -100,8 +117,29 @@ export async function GET() {
       activeMinutes: d.activeMinutes,
     }));
 
+    // Heatmap: last 365 days of workout completions
+    const heatmap: Array<{ date: string; count: number }> = [];
+    const dateCountMap: Record<string, number> = {};
+    for (const w of allWorkouts) {
+      if (!w.completedAt) continue;
+      const key = format(w.completedAt, "yyyy-MM-dd");
+      dateCountMap[key] = (dateCountMap[key] ?? 0) + 1;
+    }
+    for (let i = 364; i >= 0; i--) {
+      const d = subDays(now, i);
+      const key = format(d, "yyyy-MM-dd");
+      heatmap.push({ date: key, count: dateCountMap[key] ?? 0 });
+    }
+
+    // Milestone annotations for weight chart
+    const milestoneAnnotations = milestones.map((m) => ({
+      date: format(m.achievedAt, "MMM d"),
+      label: m.milestoneType,
+      weight: m.targetKg,
+    }));
+
     // Stats summary
-    const totalWorkouts = workouts.length;
+    const totalWorkouts = allWorkouts.length;
     const currentWeight = user.currentWeight ?? user.startingWeight ?? 82;
     const targetWeight = user.targetWeight ?? 75;
     const startingWeight = user.startingWeight ?? 82;
@@ -110,11 +148,11 @@ export async function GET() {
       ? Math.round(((startingWeight - currentWeight) / (startingWeight - targetWeight)) * 100)
       : 0;
 
-    // Current streak
+    // Streak
     let streak = 0;
-    let check = startOfWeek(new Date(), { weekStartsOn: 1 });
+    let check = startOfWeek(now, { weekStartsOn: 1 });
     for (let i = 0; i < 52; i++) {
-      const count = workouts.filter((w) => {
+      const count = allWorkouts.filter((w) => {
         const ws = startOfWeek(w.completedAt!, { weekStartsOn: 1 });
         return ws.getTime() === check.getTime();
       }).length;
@@ -122,7 +160,17 @@ export async function GET() {
       else break;
     }
 
-    // Fitbit linked?
+    // Projected weeks
+    let projectedWeeksLeft: number | null = null;
+    if (weightLost > 0 && user.goalStartedAt) {
+      const weeksElapsed = Math.max(1, differenceInWeeks(now, user.goalStartedAt));
+      const ratePerWeek = weightLost / weeksElapsed;
+      const remaining = currentWeight - targetWeight;
+      if (remaining > 0 && ratePerWeek > 0) {
+        projectedWeeksLeft = Math.ceil(remaining / ratePerWeek);
+      }
+    }
+
     const fitbitLinked = !!user.fitbitAccessToken;
 
     return NextResponse.json({
@@ -133,6 +181,8 @@ export async function GET() {
       topExercises,
       fitbitTrend,
       fitbitLinked,
+      heatmap,
+      milestoneAnnotations,
       stats: {
         totalWorkouts,
         currentWeight,
@@ -141,10 +191,22 @@ export async function GET() {
         weightLost: Math.round(weightLost * 10) / 10,
         progressPct: Math.max(0, Math.min(100, progressPct)),
         streak,
+        projectedWeeksLeft,
       },
     });
   } catch (e) {
     console.error("[analytics]", e);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+function getRangeStart(range: string, now: Date): Date {
+  switch (range) {
+    case "1W": return subDays(now, 7);
+    case "1M": return subDays(now, 30);
+    case "3M": return subDays(now, 90);
+    case "6M": return subDays(now, 180);
+    case "1Y": return subDays(now, 365);
+    default: return subDays(now, 90);
   }
 }
