@@ -142,7 +142,6 @@ export async function createWorkoutSlotsForWeek(
     try {
       const body: Record<string, unknown> = {
         start: startTime,
-        lengthInMinutes: WORKOUT_DURATION_MINS,
         attendee: {
           name: options.attendeeName ?? options.attendeeEmail.split("@")[0],
           email: options.attendeeEmail,
