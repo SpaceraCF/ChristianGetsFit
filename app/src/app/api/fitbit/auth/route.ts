@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getFitbitAuthUrl } from "@/lib/fitbit";
 import { SignJWT } from "jose";
@@ -7,10 +7,12 @@ const SECRET = new TextEncoder().encode(
   process.env.NEXTAUTH_SECRET ?? "christian-gets-fit-dev-secret"
 );
 
-export async function GET(req: NextRequest) {
+const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
+
+export async function GET() {
   const session = await getSession();
   if (!session) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(`${APP_URL}/dashboard`);
   }
   const state = await new SignJWT({ userId: session.id })
     .setProtectedHeader({ alg: "HS256" })

@@ -9,7 +9,7 @@ const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   if (!code) {
-    return NextResponse.redirect(new URL("/?error=no_code", req.url));
+    return NextResponse.redirect(`${APP_URL}/?error=no_code`);
   }
 
   try {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
       console.error("[Google OAuth] Token exchange failed:", await tokenRes.text());
-      return NextResponse.redirect(new URL("/?error=token_failed", req.url));
+      return NextResponse.redirect(`${APP_URL}/?error=token_failed`);
     }
 
     const tokens = await tokenRes.json();
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!userInfoRes.ok) {
-      return NextResponse.redirect(new URL("/?error=userinfo_failed", req.url));
+      return NextResponse.redirect(`${APP_URL}/?error=userinfo_failed`);
     }
 
     const googleUser: { email: string; name?: string; picture?: string } = await userInfoRes.json();
@@ -59,9 +59,9 @@ export async function GET(req: NextRequest) {
     const sessionToken = await createSession(user.id, user.email);
     await setSessionCookie(sessionToken);
 
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(`${APP_URL}/dashboard`);
   } catch (e) {
     console.error("[Google OAuth]", e);
-    return NextResponse.redirect(new URL("/?error=auth_failed", req.url));
+    return NextResponse.redirect(`${APP_URL}/?error=auth_failed`);
   }
 }

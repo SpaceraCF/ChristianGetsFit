@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
 import { exchangeFitbitCode } from "@/lib/fitbit";
 
+const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
 const SECRET = new TextEncoder().encode(
   process.env.NEXTAUTH_SECRET ?? "christian-gets-fit-dev-secret"
 );
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
   if (!code || !state) {
-    return NextResponse.redirect(new URL("/dashboard/settings?fitbit=error", req.url));
+    return NextResponse.redirect(`${APP_URL}/dashboard/settings?fitbit=error`);
   }
   try {
     const { payload } = await jwtVerify(state, SECRET);
@@ -28,8 +29,8 @@ export async function GET(req: NextRequest) {
         fitbitTokenExpiresAt: expiresAt,
       },
     });
-    return NextResponse.redirect(new URL("/dashboard/settings?fitbit=ok", req.url));
+    return NextResponse.redirect(`${APP_URL}/dashboard/settings?fitbit=ok`);
   } catch {
-    return NextResponse.redirect(new URL("/dashboard/settings?fitbit=error", req.url));
+    return NextResponse.redirect(`${APP_URL}/dashboard/settings?fitbit=error`);
   }
 }
