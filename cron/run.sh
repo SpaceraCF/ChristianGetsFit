@@ -10,7 +10,7 @@ AUTH="Authorization: Bearer $CRON_SECRET"
 
 call() {
   echo "--- $1 ---"
-  curl -sf -H "$AUTH" "$APP_URL$1" && echo "" || echo "  (failed or skipped)"
+  curl -sf --max-time 55 -H "$AUTH" "$APP_URL$1" && echo "" || echo "  (failed or skipped)"
 }
 
 if [ "$CRON_MODE" = "daily" ]; then

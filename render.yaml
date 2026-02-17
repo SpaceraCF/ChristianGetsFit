@@ -12,8 +12,9 @@ services:
     runtime: node
     rootDir: app
     plan: starter
-    buildCommand: npm ci && npx prisma generate && npm run build
-    startCommand: npx prisma db push && npm run start
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma db push && npx tsx prisma/seed-safe.ts
+    startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
