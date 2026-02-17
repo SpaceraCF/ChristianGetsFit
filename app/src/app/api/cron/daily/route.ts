@@ -5,11 +5,10 @@ import { getSlotsTodayBetween11and4, getTodaysWorkoutBookings } from "@/lib/calc
 import { PLANNED_WORKOUTS_PER_WEEK, MIN_WORKOUTS_FOR_GOAL, DEFAULT_SCHEDULE_TIMEZONE } from "@/lib/config";
 import { sendTelegram } from "@/lib/telegram";
 import { getMorningInspiration, getPumpUpMessage } from "@/lib/inspiration";
-import { format } from "date-fns";
+import { wasSentToday, markSent } from "@/lib/notifications";
 
 export const maxDuration = 60;
 
-/** Get current hour and minute in AEDT/AEST (handles DST automatically). */
 function getAEDTTime(date: Date): { hour: number; minute: number; dayName: string } {
   const formatter = new Intl.DateTimeFormat("en-AU", {
     timeZone: DEFAULT_SCHEDULE_TIMEZONE,
@@ -25,7 +24,6 @@ function getAEDTTime(date: Date): { hour: number; minute: number; dayName: strin
   return { hour, minute, dayName };
 }
 
-/** Get start of "today" in AEDT as a UTC Date. */
 function getAEDTTodayStart(): Date {
   const nowStr = new Date().toLocaleDateString("en-CA", { timeZone: DEFAULT_SCHEDULE_TIMEZONE });
   return new Date(nowStr + "T00:00:00+11:00");
@@ -75,8 +73,8 @@ export async function GET(req: NextRequest) {
       }
       const nextBooking = todaysBookings.find((b) => b.getTime() > nowMs);
 
-      // 7:00am AEDT — Morning inspiration + daily status
-      if (hour === 7 && minute < 30) {
+      // 7:00am AEDT — Morning inspiration
+      if (hour >= 7 && hour < 8 && !(await wasSentToday(user.id, "morning"))) {
         const inspiration = getMorningInspiration();
         const bookingInfo = todaysBookings.length > 0
           ? `Workout booked at ${todaysBookings.map((b) => {
@@ -88,43 +86,48 @@ export async function GET(req: NextRequest) {
           chatId,
           `${inspiration}\n\nToday: Workout ${stats.nextWorkoutType}. This week: ${stats.workoutsThisWeek}/${PLANNED_WORKOUTS_PER_WEEK} (min ${MIN_WORKOUTS_FOR_GOAL}). ${bookingInfo}`
         );
+        await markSent(user.id, "morning");
         sent++;
       }
 
-      // 5-10 mins before booked workout — Pump-up message
-      if (nextBooking && !workedOutToday) {
+      // 5-10 mins before booked workout — Pump-up (only once)
+      if (nextBooking && !workedOutToday && !(await wasSentToday(user.id, "pumpup"))) {
         const minsUntilBooking = (nextBooking.getTime() - nowMs) / (60 * 1000);
-        if (minsUntilBooking > 0 && minsUntilBooking <= 10) {
+        if (minsUntilBooking > 0 && minsUntilBooking <= 15) {
           const pumpUp = getPumpUpMessage();
           const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: DEFAULT_SCHEDULE_TIMEZONE, hour: "numeric", minute: "2-digit", hour12: true });
           const bookingTime = fmt.format(nextBooking);
           await sendTelegram(chatId, `${pumpUp}\n\nYour Workout ${stats.nextWorkoutType} is booked at ${bookingTime}. Get ready!`);
+          await markSent(user.id, "pumpup");
           sent++;
         }
       }
 
-      // 11am AEDT — Workout window open
-      if (hour === 11 && minute < 30 && !workedOutToday) {
+      // 11am AEDT — Workout window open (once)
+      if (hour >= 11 && hour < 12 && !workedOutToday && !(await wasSentToday(user.id, "window"))) {
         const minsToNext = nextBooking ? (nextBooking.getTime() - nowMs) / (60 * 1000) : Infinity;
-        if (minsToNext > 10) {
+        if (minsToNext > 15) {
           await sendTelegram(chatId, "Your workout window is open (11am–4pm). Time for Workout " + stats.nextWorkoutType + "?");
+          await markSent(user.id, "window");
           sent++;
         }
       }
 
-      // 3pm AEDT — Last call
-      if (hour === 15 && minute < 30 && !workedOutToday) {
+      // 3pm AEDT — Last call (once)
+      if (hour >= 15 && hour < 16 && !workedOutToday && !(await wasSentToday(user.id, "lastcall"))) {
         await sendTelegram(chatId, "Last call — get your workout in before 4pm AEDT! " + stats.workoutsThisWeek + "/" + PLANNED_WORKOUTS_PER_WEEK + " this week (need " + MIN_WORKOUTS_FOR_GOAL + " for goal).");
+        await markSent(user.id, "lastcall");
         sent++;
       }
 
-      // 6pm AEDT — Daily summary
-      if (hour === 18 && minute < 30) {
+      // 6pm AEDT — Daily summary (once)
+      if (hour >= 18 && hour < 19 && !(await wasSentToday(user.id, "summary"))) {
         if (workedOutToday) {
           await sendTelegram(chatId, `${dayName} done! You worked out today. This week: ${stats.workoutsThisWeek}/${PLANNED_WORKOUTS_PER_WEEK}. ${stats.workoutsThisWeek >= MIN_WORKOUTS_FOR_GOAL ? "Goal hit — enjoy the weekend!" : `${MIN_WORKOUTS_FOR_GOAL - stats.workoutsThisWeek} more to clear the alcohol ban.`}`);
         } else {
           await sendTelegram(chatId, `${dayName} wrap-up: No workout today. This week: ${stats.workoutsThisWeek}/${PLANNED_WORKOUTS_PER_WEEK}. ${stats.workoutsThisWeek >= MIN_WORKOUTS_FOR_GOAL ? "Goal already hit — rest easy." : `Still need ${MIN_WORKOUTS_FOR_GOAL - stats.workoutsThisWeek} more this week.`}`);
         }
+        await markSent(user.id, "summary");
         sent++;
       }
     } catch (e) {

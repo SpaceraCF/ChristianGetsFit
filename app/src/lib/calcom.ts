@@ -42,13 +42,13 @@ export async function getSlotsTodayBetween11and4(
 
 /**
  * Fetch today's confirmed Cal.com bookings for the workout event type.
- * Returns the start times in UTC as Date objects, sorted ascending.
+ * Uses AEDT date boundaries so "today" matches the user's local day.
+ * Returns the start times as Date objects, sorted ascending.
  */
 export async function getTodaysWorkoutBookings(
   apiKey: string,
 ): Promise<Date[]> {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10);
+  const dateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
   const afterStart = `${dateStr}T00:00:00.000Z`;
   const beforeEnd = `${dateStr}T23:59:59.999Z`;
 

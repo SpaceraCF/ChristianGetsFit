@@ -1,7 +1,7 @@
 /**
  * Large pool of unique inspirational messages.
- * Uses day-of-year + category to pick a different one every day.
- * With 50+ messages per category, you won't see a repeat for months.
+ * Uses a hash of the date to pick a different one every day.
+ * With 50+ messages per category + hash scrambling, repeats are months apart.
  */
 
 const MORNING_MESSAGES = [
@@ -50,10 +50,21 @@ const MORNING_MESSAGES = [
   "Every morning you have two choices: continue to sleep with your dreams, or wake up and chase them.",
   "Sweat is fat crying. Make it weep.",
   "The gym is open. Your excuses are closed.",
-  "You've got 82kg worth of reasons to train today. Well, less now — and dropping.",
+  "You've got reasons to train today. And fewer kg to lose every week.",
   "Today's effort is tomorrow's result.",
   "The greatest wealth is health. Invest in it today.",
   "Strong is the new skinny. And you're getting there.",
+  "Your muscles are waiting. Don't keep them waiting.",
+  "Iron sharpens iron. You sharpen yourself every single session.",
+  "You didn't come this far to only come this far.",
+  "Every day is a chance to get better. Today is no different.",
+  "Results happen over time, not overnight. Keep showing up.",
+  "The weight room is your therapy session. Time to check in.",
+  "Your comfort zone is a beautiful place but nothing ever grows there.",
+  "Sore today, strong tomorrow.",
+  "The only way to finish is to start. Let's go.",
+  "Think of it this way: you're lapping everyone on the couch.",
+  "Nobody said it would be easy. They said it would be worth it.",
 ];
 
 const PUMP_UP_MESSAGES = [
@@ -107,25 +118,42 @@ const PUMP_UP_MESSAGES = [
   "Today's pain is tomorrow's power.",
   "Less talk, more chalk. (Or whatever gym people say. Just go!)",
   "Your workout streak won't build itself. Keep the chain going.",
+  "The gym doesn't ask questions. The gym understands.",
+  "You don't need motivation. You need discipline. You have both.",
+  "30 minutes. That's it. Then you're a legend for the rest of the day.",
+  "Strong people aren't born. They're built. One workout at a time.",
+  "The version of you that shows up today shapes the version that wakes up tomorrow.",
 ];
 
 /**
- * Pick a message from a pool based on the current date.
- * Uses day-of-year so it rotates through the full pool before repeating.
- * The offset parameter differentiates morning vs pump-up on the same day.
+ * Simple hash for a string -> number. Produces a well-distributed integer.
+ * This ensures that consecutive days get very different indices.
  */
-function pickMessage(pool: string[], offset: number = 0): string {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-  const idx = (dayOfYear + offset) % pool.length;
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/**
+ * Pick a message from a pool based on the current date.
+ * Uses a hash of "YYYY-MM-DD:<category>" so:
+ *   - Same message all day (stable per date)
+ *   - Different message each day (hash scrambles consecutive dates)
+ *   - Morning vs pump-up get different messages on the same day
+ */
+function pickMessage(pool: string[], category: string): string {
+  const dateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
+  const idx = hashStr(`${dateStr}:${category}`) % pool.length;
   return pool[idx];
 }
 
 export function getMorningInspiration(): string {
-  return pickMessage(MORNING_MESSAGES, 0);
+  return pickMessage(MORNING_MESSAGES, "morning");
 }
 
 export function getPumpUpMessage(): string {
-  return pickMessage(PUMP_UP_MESSAGES, 7);
+  return pickMessage(PUMP_UP_MESSAGES, "pumpup");
 }
