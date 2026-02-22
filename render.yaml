@@ -62,14 +62,14 @@ services:
       - key: CRON_SECRET
         sync: false
 
-  # Daily at 13:00 UTC (midnight AEDT): Fitbit sync, Cal.com scheduling, weekly recap
+  # Daily at 21:00 UTC (8am AEDT): Fitbit sync, Cal.com scheduling, weekly recap
   - type: cron
     name: cgf-daily
     runtime: docker
     dockerfilePath: ./cron/Dockerfile
     dockerContext: ./cron
     plan: starter
-    schedule: "0 13 * * *"
+    schedule: "0 21 * * *"
     envVars:
       - key: CRON_MODE
         value: daily
