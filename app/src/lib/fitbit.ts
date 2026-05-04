@@ -79,11 +79,25 @@ export async function getFitbitSleep(
   const data = await res.json();
   const summary = data.summary;
   if (!summary) return null;
+
+  // Fitbit puts `efficiency` on the individual sleep record, NOT on the summary.
+  // Prefer the main sleep record; fall back to the first record if none is flagged main.
+  const sleeps: Array<{ isMainSleep?: boolean; efficiency?: number }> = data.sleep ?? [];
+  const mainSleep = sleeps.find((s) => s.isMainSleep) ?? sleeps[0];
   const totalMins = summary.totalMinutesAsleep ?? 0;
-  const efficiency = summary.efficiency ?? 0;
+  const efficiency = mainSleep?.efficiency ?? 0;
+
   let recommendation: "rest" | "normal" | "push" = "normal";
-  if (totalMins < 360 || efficiency < 75) recommendation = "rest";
-  else if (totalMins >= 420 && efficiency >= 85) recommendation = "push";
+  if (totalMins === 0 && efficiency === 0) {
+    // No sleep data for this date (Fitbit didn't sync, or device wasn't worn).
+    // Don't nag — treat as a normal day.
+    recommendation = "normal";
+  } else if (totalMins < 360 || (efficiency > 0 && efficiency < 75)) {
+    recommendation = "rest";
+  } else if (totalMins >= 420 && efficiency >= 85) {
+    recommendation = "push";
+  }
+
   return {
     durationMins: totalMins,
     efficiency,
