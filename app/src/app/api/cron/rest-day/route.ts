@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getFitbitSleep } from "@/lib/fitbit";
 import { sendTelegram } from "@/lib/telegram";
-import { format, subDays } from "date-fns";
+import { yesterdayInSydney } from "@/lib/time";
 import { wasSentToday, markSent } from "@/lib/notifications";
 
 export const maxDuration = 60;
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const yesterday = yesterdayInSydney();
   const users = await prisma.user.findMany({
     where: {
       fitbitAccessToken: { not: null },
