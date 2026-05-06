@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,8 @@ type ExerciseItem = {
   orderInWorkout: number;
   videoUrl: string | null;
 };
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function getYouTubeEmbedId(url: string): string | null {
   const patterns = [
@@ -85,19 +87,24 @@ function DoWorkoutPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Crash-recovery: workoutId is the in-progress Workout row this session
+  // is writing to. Persists across exercises.
+  const [workoutId, setWorkoutId] = useState<string | null>(null);
+  const [resumed, setResumed] = useState(false);
+  const startedRef = useRef(false);
+
   const [phase, setPhase] = useState<"warmup" | "exercise" | "feedback" | "done">("warmup");
-  const [warmUpCountdown, setWarmUpCountdown] = useState<number | null>(null); // 5,4,3,2,1 then advance
+  const [warmUpCountdown, setWarmUpCountdown] = useState<number | null>(null);
   const [warmUpIndex, setWarmUpIndex] = useState(0);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [restSecsLeft, setRestSecsLeft] = useState(0);
   const [setsDone, setSetsDone] = useState(0);
+  const [repsThisSet, setRepsThisSet] = useState<number[]>([]);
   const [weightUsed, setWeightUsed] = useState(0);
   const [difficulty, setDifficulty] = useState<"too_light" | "just_right" | "too_heavy" | null>(null);
   const [enjoyed, setEnjoyed] = useState<boolean | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [submitting, setSubmitting] = useState(false);
-  const [completedExercises, setCompletedExercises] = useState<
-    Array<{ exerciseId: string; weightKg: number; setsCompleted: number; difficultyFeedback: string; enjoyed: boolean }>
-  >([]);
 
   const fetchWorkout = useCallback(async () => {
     setLoading(true);
@@ -119,6 +126,37 @@ function DoWorkoutPageInner() {
     fetchWorkout();
   }, [fetchWorkout]);
 
+  // Once exercises load, start (or resume) the workout. Skips the warm-up
+  // automatically if we're resuming a workout that was already underway.
+  useEffect(() => {
+    if (loading || exercises.length === 0 || startedRef.current) return;
+    startedRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/workout/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutType: type, isExpress: express }),
+        });
+        if (!res.ok) throw new Error("Failed to start workout");
+        const data = await res.json();
+        setWorkoutId(data.workoutId);
+        setResumed(!!data.resumed);
+        const alreadyLogged: string[] = data.alreadyLogged ?? [];
+        if (alreadyLogged.length > 0) {
+          // Find the index of the first un-logged exercise so we resume there.
+          const firstPending = exercises.findIndex((e) => !alreadyLogged.includes(e.id));
+          const resumeAt = firstPending === -1 ? exercises.length - 1 : firstPending;
+          setExerciseIndex(resumeAt);
+          setPhase("exercise"); // skip warm-up on resume
+        }
+      } catch (e) {
+        console.error("workout/start failed", e);
+        // Continue without crash recovery — the legacy /complete fallback at end will still try to save.
+      }
+    })();
+  }, [loading, exercises, type, express]);
+
   useEffect(() => {
     if (phase !== "exercise" || exercises.length === 0) return;
     const ex = exercises[exerciseIndex];
@@ -126,6 +164,7 @@ function DoWorkoutPageInner() {
     setWeightUsed(ex.recommendedWeightKg);
     setRestSecsLeft(ex.restSecs);
     setSetsDone(0);
+    setRepsThisSet([]);
   }, [phase, exerciseIndex, exercises]);
 
   useEffect(() => {
@@ -134,7 +173,7 @@ function DoWorkoutPageInner() {
     return () => clearInterval(t);
   }, [phase, restSecsLeft]);
 
-  // Warm-up countdown: 5…4…3(beep)…2(beep)…1(beep) then advance
+  // Warm-up countdown
   useEffect(() => {
     if (warmUpCountdown === null) return;
     if (warmUpCountdown <= 0) {
@@ -154,7 +193,7 @@ function DoWorkoutPageInner() {
     return () => clearInterval(id);
   }, [warmUpCountdown, warmUpIndex, warmUp.length]);
 
-  // Screen Wake Lock: keep screen on during workout
+  // Screen wake lock during workout
   useEffect(() => {
     if (phase !== "warmup" && phase !== "exercise") return;
     let wakeLock: { release: () => Promise<void> } | null = null;
@@ -209,6 +248,11 @@ function DoWorkoutPageInner() {
 
   const handleCompleteSet = () => {
     if (!currentExercise) return;
+    // Capture reps for this set. Default to repsMin in the middle of the
+    // recommended range so the rep cap can fire when the user hits it.
+    const repsForSet = Math.round((currentExercise.repsMin + currentExercise.repsMax) / 2);
+    const newReps = [...repsThisSet, repsForSet];
+    setRepsThisSet(newReps);
     const nextSets = setsDone + 1;
     setSetsDone(nextSets);
     if (nextSets >= currentExercise.sets) {
@@ -218,33 +262,73 @@ function DoWorkoutPageInner() {
     }
   };
 
+  /** Persist this exercise's results to the server. Idempotent on retry. */
+  const saveExerciseLog = useCallback(
+    async (payload: {
+      exerciseId: string;
+      weightKg: number;
+      setsCompleted: number;
+      repsCompleted: number[];
+      difficultyFeedback: "too_light" | "just_right" | "too_heavy";
+      enjoyed: boolean;
+    }): Promise<boolean> => {
+      if (!workoutId) return false;
+      setSaveStatus("saving");
+      try {
+        const res = await fetch("/api/workout/exercise-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutId, ...payload }),
+        });
+        if (!res.ok) throw new Error("Save failed");
+        setSaveStatus("saved");
+        return true;
+      } catch (e) {
+        console.error("exercise-log failed", e);
+        setSaveStatus("error");
+        return false;
+      }
+    },
+    [workoutId]
+  );
+
   const handleFeedbackSubmit = async () => {
     if (difficulty === null || enjoyed === null || !currentExercise) return;
+    const repsCompleted = repsThisSet.length === currentExercise.sets
+      ? repsThisSet
+      : Array(currentExercise.sets).fill(Math.round((currentExercise.repsMin + currentExercise.repsMax) / 2));
     const payload = {
       exerciseId: currentExercise.id,
       weightKg: weightUsed,
       setsCompleted: currentExercise.sets,
+      repsCompleted,
       difficultyFeedback: difficulty,
       enjoyed,
     };
-    setCompletedExercises((prev) => [...prev, payload]);
+
+    // Persist NOW so a crash here doesn't lose the exercise.
+    const ok = await saveExerciseLog(payload);
+    if (!ok) {
+      // Leave UI in error state with a retry button instead of advancing.
+      return;
+    }
+
     setDifficulty(null);
     setEnjoyed(null);
+
     if (exerciseIndex >= exercises.length - 1) {
+      // Final exercise — finalize the workout.
       setSubmitting(true);
       try {
-        const res = await fetch("/api/workout/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workoutType: type,
-            isExpress: express,
-            exercises: [...completedExercises, payload],
-          }),
-        });
-        if (!res.ok) throw new Error("Failed to save");
-      } catch {
-        // still show done
+        if (workoutId) {
+          await fetch("/api/workout/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workoutId }),
+          });
+        }
+      } catch (e) {
+        console.error("complete failed", e);
       }
       setSubmitting(false);
       setPhase("done");
@@ -294,6 +378,11 @@ function DoWorkoutPageInner() {
   if (phase === "warmup" && currentWarmUp) {
     return (
       <div className="max-w-lg mx-auto space-y-6">
+        {resumed && (
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            Resuming an in-progress workout. Pick up where you left off.
+          </div>
+        )}
         <div className="text-sm text-muted-foreground">
           Warm-up {warmUpIndex + 1} of {warmUp.length}
         </div>
@@ -351,11 +440,20 @@ function DoWorkoutPageInner() {
           </div>
           <Button
             className="w-full mt-4"
-            disabled={difficulty === null || enjoyed === null || submitting}
+            disabled={difficulty === null || enjoyed === null || submitting || saveStatus === "saving"}
             onClick={handleFeedbackSubmit}
           >
-            Next exercise
+            {saveStatus === "saving"
+              ? "Saving…"
+              : saveStatus === "error"
+              ? "Retry save"
+              : exerciseIndex >= exercises.length - 1
+              ? "Finish workout"
+              : "Next exercise"}
           </Button>
+          {saveStatus === "error" && (
+            <p className="text-sm text-destructive">Couldn&apos;t reach the server. Tap Retry — your reps and feedback are still here.</p>
+          )}
         </div>
       </div>
     );
@@ -364,6 +462,11 @@ function DoWorkoutPageInner() {
   if (phase === "exercise" && currentExercise) {
     return (
       <div className="max-w-lg mx-auto space-y-6">
+        {resumed && exerciseIndex > 0 && (
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            Resumed from a previous session. {exerciseIndex} {exerciseIndex === 1 ? "exercise" : "exercises"} already saved.
+          </div>
+        )}
         <div className="text-sm text-muted-foreground">
           Exercise {exerciseIndex + 1} of {exercises.length}
         </div>
