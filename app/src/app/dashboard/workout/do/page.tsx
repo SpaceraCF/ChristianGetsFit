@@ -7,6 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WarmUpItem = { id: string; name: string; instructions: string | null; orderInWorkout: number | null; videoUrl: string | null };
+type ProgramInfo = {
+  block: number;
+  blockName: string;
+  week: number;
+  weekName: string;
+  weekDescription: string;
+  targetRir: number;
+  sessionInWeek: number;
+  sessionInBlock: number;
+  sessionsRemainingInBlock: number;
+};
 type ExerciseItem = {
   id: string;
   name: string;
@@ -16,6 +27,8 @@ type ExerciseItem = {
   repsMax: number;
   restSecs: number;
   recommendedWeightKg: number;
+  weightIncrementKg: number;
+  weightCue: string | null;
   orderInWorkout: number;
   videoUrl: string | null;
 };
@@ -82,6 +95,7 @@ function DoWorkoutPageInner() {
 
   const [warmUp, setWarmUp] = useState<WarmUpItem[]>([]);
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
+  const [program, setProgram] = useState<ProgramInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,12 +105,15 @@ function DoWorkoutPageInner() {
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [restSecsLeft, setRestSecsLeft] = useState(0);
   const [setsDone, setSetsDone] = useState(0);
+  const [repsThisSet, setRepsThisSet] = useState(8);
+  const [repsDone, setRepsDone] = useState<number[]>([]);
   const [weightUsed, setWeightUsed] = useState(0);
   const [difficulty, setDifficulty] = useState<"too_light" | "just_right" | "too_heavy" | null>(null);
   const [enjoyed, setEnjoyed] = useState<boolean | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [workoutStartedAt] = useState(() => Date.now());
   const [completedExercises, setCompletedExercises] = useState<
-    Array<{ exerciseId: string; weightKg: number; setsCompleted: number; difficultyFeedback: string; enjoyed: boolean }>
+    Array<{ exerciseId: string; weightKg: number; setsCompleted: number; repsPerSet: number[]; difficultyFeedback: string; enjoyed: boolean }>
   >([]);
 
   const fetchWorkout = useCallback(async () => {
@@ -108,6 +125,7 @@ function DoWorkoutPageInner() {
       const data = await res.json();
       setWarmUp(data.warmUp ?? []);
       setExercises(data.exercises ?? []);
+      setProgram(data.program ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -124,8 +142,10 @@ function DoWorkoutPageInner() {
     const ex = exercises[exerciseIndex];
     if (!ex) return;
     setWeightUsed(ex.recommendedWeightKg);
-    setRestSecsLeft(ex.restSecs);
+    setRestSecsLeft(0);
     setSetsDone(0);
+    setRepsThisSet(ex.repsMin);
+    setRepsDone([]);
   }, [phase, exerciseIndex, exercises]);
 
   useEffect(() => {
@@ -211,6 +231,7 @@ function DoWorkoutPageInner() {
     if (!currentExercise) return;
     const nextSets = setsDone + 1;
     setSetsDone(nextSets);
+    setRepsDone((reps) => [...reps, repsThisSet]);
     if (nextSets >= currentExercise.sets) {
       setPhase("feedback");
     } else {
@@ -224,12 +245,10 @@ function DoWorkoutPageInner() {
       exerciseId: currentExercise.id,
       weightKg: weightUsed,
       setsCompleted: currentExercise.sets,
+      repsPerSet: repsDone,
       difficultyFeedback: difficulty,
       enjoyed,
     };
-    setCompletedExercises((prev) => [...prev, payload]);
-    setDifficulty(null);
-    setEnjoyed(null);
     if (exerciseIndex >= exercises.length - 1) {
       setSubmitting(true);
       try {
@@ -239,16 +258,22 @@ function DoWorkoutPageInner() {
           body: JSON.stringify({
             workoutType: type,
             isExpress: express,
+            durationMins: Math.max(1, Math.round((Date.now() - workoutStartedAt) / 60_000)),
             exercises: [...completedExercises, payload],
           }),
         });
-        if (!res.ok) throw new Error("Failed to save");
-      } catch {
-        // still show done
+        const body = await res.json();
+        if (!res.ok) throw new Error(typeof body.error === "string" ? body.error : "Workout could not be saved");
+        setPhase("done");
+      } catch (submissionError) {
+        setError(submissionError instanceof Error ? submissionError.message : "Workout could not be saved");
+      } finally {
+        setSubmitting(false);
       }
-      setSubmitting(false);
-      setPhase("done");
     } else {
+      setCompletedExercises((previous) => [...previous, payload]);
+      setDifficulty(null);
+      setEnjoyed(null);
       setExerciseIndex((i) => i + 1);
       setPhase("exercise");
     }
@@ -274,7 +299,7 @@ function DoWorkoutPageInner() {
     return (
       <div className="max-w-lg mx-auto space-y-6 text-center py-8">
         <h2 className="text-2xl font-bold">Workout complete!</h2>
-        <p className="text-muted-foreground">You crushed it. That counts toward your 3/week.</p>
+        <p className="text-muted-foreground">Saved. Your next session will use the next step in the four-week plan.</p>
         <Button asChild size="lg">
           <Link href="/dashboard">Back to dashboard</Link>
         </Button>
@@ -325,6 +350,10 @@ function DoWorkoutPageInner() {
       <div className="max-w-lg mx-auto space-y-6">
         <h3 className="text-lg font-semibold">How was {weightUsed}kg for {currentExercise.name}?</h3>
         <div className="space-y-4">
+          {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+          <p className="text-sm text-muted-foreground">
+            Today&apos;s target was about {program?.targetRir ?? 2} good reps still available. Your answer adjusts the next recommendation.
+          </p>
           <p className="text-sm text-muted-foreground">Difficulty</p>
           <div className="flex gap-2 flex-wrap">
             {(["too_heavy", "just_right", "too_light"] as const).map((d) => (
@@ -354,7 +383,7 @@ function DoWorkoutPageInner() {
             disabled={difficulty === null || enjoyed === null || submitting}
             onClick={handleFeedbackSubmit}
           >
-            Next exercise
+            {submitting ? "Saving…" : exerciseIndex >= exercises.length - 1 ? "Finish and save" : "Next exercise"}
           </Button>
         </div>
       </div>
@@ -367,6 +396,12 @@ function DoWorkoutPageInner() {
         <div className="text-sm text-muted-foreground">
           Exercise {exerciseIndex + 1} of {exercises.length}
         </div>
+        {program && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+            <p className="text-sm font-semibold">Block {program.block}: {program.blockName} · Week {program.week}: {program.weekName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{program.weekDescription}</p>
+          </div>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>{currentExercise.name}</CardTitle>
@@ -374,16 +409,17 @@ function DoWorkoutPageInner() {
               Recommended: {currentExercise.recommendedWeightKg}kg · Sets: {currentExercise.sets} × {currentExercise.repsMin}
               –{currentExercise.repsMax} reps
             </p>
+            {currentExercise.weightCue && <p className="text-xs text-muted-foreground">{currentExercise.weightCue}</p>}
             <VideoEmbed videoUrl={currentExercise.videoUrl} name={currentExercise.name} />
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
+            {currentExercise.weightIncrementKg > 0 && <div className="flex items-center gap-4">
               <label className="text-sm">Weight (kg)</label>
               <div className="flex gap-2 items-center">
                 <button
                   type="button"
                   className="rounded border px-3 py-1 text-lg"
-                  onClick={() => setWeightUsed((w) => Math.max(0, w - (currentExercise.equipment === "smith_machine" ? 2.5 : 1)))}
+                  onClick={() => setWeightUsed((w) => Math.max(0, w - currentExercise.weightIncrementKg))}
                 >
                   −
                 </button>
@@ -391,21 +427,32 @@ function DoWorkoutPageInner() {
                 <button
                   type="button"
                   className="rounded border px-3 py-1 text-lg"
-                  onClick={() => setWeightUsed((w) => w + (currentExercise.equipment === "smith_machine" ? 2.5 : 1))}
+                  onClick={() => setWeightUsed((w) => w + currentExercise.weightIncrementKg)}
                 >
                   +
                 </button>
               </div>
-            </div>
+            </div>}
             <p className="text-sm">
               Sets completed: {setsDone} / {currentExercise.sets}
             </p>
+            {repsDone.length > 0 && <p className="text-xs text-muted-foreground">Logged reps: {repsDone.join(" · ")}</p>}
             {restSecsLeft > 0 ? (
               <p className="text-lg font-mono">Rest: {restSecsLeft}s</p>
             ) : (
-              <Button className="w-full" size="lg" onClick={handleCompleteSet}>
-                Complete set
-              </Button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                  <span className="text-sm">Reps this set</span>
+                  <div className="flex items-center gap-3">
+                    <button type="button" className="rounded border bg-background px-3 py-1" onClick={() => setRepsThisSet((reps) => Math.max(1, reps - 1))}>−</button>
+                    <strong className="w-6 text-center">{repsThisSet}</strong>
+                    <button type="button" className="rounded border bg-background px-3 py-1" onClick={() => setRepsThisSet((reps) => Math.min(100, reps + 1))}>+</button>
+                  </div>
+                </div>
+                <Button className="w-full" size="lg" onClick={handleCompleteSet}>
+                  Complete set
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

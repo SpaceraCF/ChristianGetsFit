@@ -4,12 +4,7 @@ import { getDashboardStats } from "@/lib/dashboard";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const WORKOUT_LABELS: Record<string, { name: string; focus: string }> = {
-  A: { name: "Push", focus: "Chest, shoulders, triceps" },
-  B: { name: "Pull", focus: "Back, biceps" },
-  C: { name: "Legs", focus: "Legs + core" },
-};
+import { WORKOUT_LABELS } from "@/lib/program";
 
 export default async function WorkoutPage() {
   const user = await getUserOrNull();
@@ -22,6 +17,23 @@ export default async function WorkoutPage() {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Workout</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Block {stats.program.block}: {stats.program.blockName} · Week {stats.program.week}: {stats.program.weekName}
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">{stats.program.weekDescription}</p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(stats.program.sessionInBlock / 12) * 100}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Session {stats.program.sessionInBlock} of 12 · Exercise selection changes after this four-week block.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Recommended next */}
       <Card className="border-primary/50">
@@ -43,7 +55,7 @@ export default async function WorkoutPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            This week: {stats.workoutsThisWeek}/5 planned · Need {stats.minWorkoutsForGoal} to avoid alcohol ban
+            Training week session {stats.program.sessionInWeek}/3 · Target: stop with about {stats.program.targetRir} good reps available
           </p>
         </CardContent>
       </Card>
@@ -55,15 +67,16 @@ export default async function WorkoutPage() {
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            5 workouts per week, rotating through 3 types: A → B → C → A → B.
-            The app tracks where you left off.
+            Three full-body sessions make one training week. Week 1 is light,
+            each week adds an available weight step, and Week 4 is the heaviest
+            without being a max test. Progress advances only when you finish a session.
           </p>
           <div className="grid grid-cols-3 gap-2 text-center">
             {(["A", "B", "C"] as const).map((t) => {
               const l = WORKOUT_LABELS[t];
               return (
                 <div key={t} className={`rounded-lg p-2 text-xs ${t === next ? "bg-primary/10 border border-primary/30" : "bg-muted"}`}>
-                  <p className="font-semibold">{t}: {l.name}</p>
+                  <p className="font-semibold">{t}: {l.name.replace("Full Body ", "")}</p>
                   <p className="text-muted-foreground">{l.focus}</p>
                 </div>
               );

@@ -1,21 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { getExercisesForWorkout, getWarmUpExercises } from "@/lib/workout";
+import {
+  getExercisesForWorkout,
+  getUserProgramState,
+  getWarmUpExercises,
+} from "@/lib/workout";
+
+const querySchema = z.object({
+  type: z.enum(["A", "B", "C"]),
+  express: z.enum(["true", "false"]),
+});
 
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
-    const type = (req.nextUrl.searchParams.get("type") ?? "A") as "A" | "B" | "C";
-    const express = req.nextUrl.searchParams.get("express") === "true";
+    const query = querySchema.parse({
+      type: req.nextUrl.searchParams.get("type") ?? "A",
+      express: req.nextUrl.searchParams.get("express") ?? "false",
+    });
+    const express = query.express === "true";
+    const program = await getUserProgramState(user.id);
 
     const [exercises, warmUp] = await Promise.all([
-      getExercisesForWorkout(user.id, type, express),
+      getExercisesForWorkout(user.id, query.type, express, program),
       getWarmUpExercises(),
     ]);
 
     return NextResponse.json({
-      workoutType: type,
+      workoutType: query.type,
       isExpress: express,
+      program,
       warmUp: warmUp.map((e) => ({
         id: e.id,
         name: e.name,
@@ -25,8 +40,11 @@ export async function GET(req: NextRequest) {
       })),
       exercises,
     });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid workout request" }, { status: 400 });
+    }
+    console.error(error);
+    return NextResponse.json({ error: "Workout could not be loaded" }, { status: 401 });
   }
 }

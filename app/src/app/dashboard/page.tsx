@@ -20,9 +20,8 @@ export default async function DashboardPage() {
   const pct = totalToLose > 0 ? Math.round((lost / totalToLose) * 100) : 0;
   const {
     workoutsThisWeek,
-    plannedWorkoutsPerWeek = 5,
+    plannedWorkoutsPerWeek = 3,
     minWorkoutsForGoal = 3,
-    punishmentActive,
     xp,
     level,
     streak,
@@ -30,10 +29,11 @@ export default async function DashboardPage() {
     recoveryStatus,
     projectedWeeksLeft,
     nextMilestone,
+    program,
   } = data;
 
   const recoveryLabel =
-    recoveryStatus === "well_rested" ? "Well rested — push harder today!"
+    recoveryStatus === "well_rested" ? "Well rested — follow today’s planned effort"
     : recoveryStatus === "take_it_easy" ? "Take it easy — your body needs recovery"
     : recoveryStatus === "normal" ? "Normal recovery — good to go"
     : null;
@@ -107,14 +107,11 @@ export default async function DashboardPage() {
           <p className="text-sm">
             Workouts: {workoutsThisWeek}/{plannedWorkoutsPerWeek} planned
             {workoutsThisWeek >= minWorkoutsForGoal
-              ? " — Goal hit (min 3)!"
-              : ` — Do at least ${minWorkoutsForGoal} to avoid the weekend alcohol ban.`}
+              ? " — Weekly goal complete!"
+              : ` — ${minWorkoutsForGoal - workoutsThisWeek} session${minWorkoutsForGoal - workoutsThisWeek === 1 ? "" : "s"} to your weekly goal.`}
           </p>
-          {punishmentActive && workoutsThisWeek < minWorkoutsForGoal && (
-            <p className="text-sm font-medium text-destructive">Alcohol ban active this weekend.</p>
-          )}
           <p className="text-sm text-muted-foreground">
-            Next: Workout {nextWorkoutType} · Streak: {streak} week{streak !== 1 ? "s" : ""} · Level {level} ({xp} XP)
+            Next: Full Body {nextWorkoutType} · Block {program.block}, week {program.week} · Streak: {streak} week{streak !== 1 ? "s" : ""} · Level {level} ({xp} XP)
           </p>
         </CardContent>
       </Card>

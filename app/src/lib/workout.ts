@@ -1,146 +1,161 @@
 import { prisma } from "@/lib/db";
+import {
+  programStateFromCompletedSessions,
+  recommendedWeightForWeek,
+  type ProgramState,
+  type WorkoutType,
+} from "@/lib/program";
 
-export type WorkoutType = "A" | "B" | "C";
+export type { WorkoutType } from "@/lib/program";
 
-/** Get exercises for a workout type, applying blacklist and injury substitutions */
+export type UserProgramState = ProgramState & {
+  startedAt: Date | null;
+};
+
+export async function getUserProgramState(
+  userId: string,
+): Promise<UserProgramState> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { workoutProgramStartedAt: true },
+  });
+  const completedSessions = user.workoutProgramStartedAt
+    ? await prisma.workout.count({
+        where: {
+          userId,
+          completedAt: { not: null, gte: user.workoutProgramStartedAt },
+        },
+      })
+    : 0;
+  return {
+    ...programStateFromCompletedSessions(completedSessions),
+    startedAt: user.workoutProgramStartedAt,
+  };
+}
+
+type WorkoutExercise = {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  equipment: string;
+  instructions: string | null;
+  weightCue: string | null;
+  sets: number;
+  repsMin: number;
+  repsMax: number;
+  restSecs: number;
+  recommendedWeightKg: number;
+  weightIncrementKg: number;
+  orderInWorkout: number;
+  isWarmUp: false;
+  videoUrl: string | null;
+};
+
+/** Select the active block, then apply blacklist and injury substitutions. */
 export async function getExercisesForWorkout(
   userId: string,
   workoutType: WorkoutType,
-  isExpress: boolean
-): Promise<
-  Array<{
-    id: string;
-    name: string;
-    muscleGroup: string;
-    equipment: string;
-    instructions: string | null;
-    sets: number;
-    repsMin: number;
-    repsMax: number;
-    restSecs: number;
-    recommendedWeightKg: number;
-    orderInWorkout: number;
-    isWarmUp: boolean;
-  }>
-> {
-  const all = await prisma.exercise.findMany({
-    where: { workoutType, isWarmUp: false },
-    orderBy: { orderInWorkout: "asc" },
-  });
+  isExpress: boolean,
+  suppliedProgram?: UserProgramState,
+): Promise<WorkoutExercise[]> {
+  const program = suppliedProgram ?? (await getUserProgramState(userId));
+  const [placements, preferences, activeInjuries, user] = await Promise.all([
+    prisma.programExercise.findMany({
+      where: { programBlock: program.block, workoutType },
+      include: { exercise: true },
+      orderBy: { orderInWorkout: "asc" },
+    }),
+    prisma.exercisePreference.findMany({ where: { userId } }),
+    prisma.injury.findMany({
+      where: { userId, resolvedAt: null },
+      select: { bodyArea: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { currentWeight: true, startingWeight: true },
+    }),
+  ]);
 
-  const limit = isExpress ? 3 : all.length;
-  const prefs = await prisma.exercisePreference.findMany({
-    where: { userId, blacklisted: true },
-    select: { exerciseId: true },
-  });
-  const blacklistedIds = new Set(prefs.map((p) => p.exerciseId));
-
-  const activeInjuries = await prisma.injury.findMany({
-    where: { userId, resolvedAt: null },
-    select: { bodyArea: true },
-  });
-  const injuredAreas = new Set(activeInjuries.map((i) => i.bodyArea.toLowerCase()));
-
-  const out: Array<{
-    id: string;
-    name: string;
-    muscleGroup: string;
-    equipment: string;
-    instructions: string | null;
-    sets: number;
-    repsMin: number;
-    repsMax: number;
-    restSecs: number;
-    recommendedWeightKg: number;
-    orderInWorkout: number;
-    isWarmUp: boolean;
-    videoUrl: string | null;
-  }> = [];
+  const preferenceByExercise = new Map(
+    preferences.map((preference) => [preference.exerciseId, preference]),
+  );
+  const injuredAreas = new Set(
+    activeInjuries.map((injury) => injury.bodyArea.toLowerCase()),
+  );
+  const bodyWeightKg = user?.currentWeight ?? user?.startingWeight ?? 82;
+  const limit = isExpress ? 3 : placements.length;
+  const output: WorkoutExercise[] = [];
   const used = new Set<string>();
 
-  for (let i = 0; i < all.length && out.length < limit; i++) {
-    const ex = all[i];
-    if (blacklistedIds.has(ex.id)) continue;
-    const skip = ex.injuryAreasToSkip.some((a) => injuredAreas.has(a.toLowerCase()));
-    if (skip && ex.substituteExerciseIds.length > 0) {
-      for (const subId of ex.substituteExerciseIds) {
-        if (used.has(subId)) continue;
-        const sub = all.find((e) => e.id === subId) ?? await prisma.exercise.findUnique({ where: { id: subId } });
-        if (sub && !blacklistedIds.has(sub.id)) {
-          const subInjured = sub.injuryAreasToSkip.some((a) => injuredAreas.has(a.toLowerCase()));
-          if (!subInjured) {
-            used.add(sub.id);
-            const rec = await getRecommendedWeight(userId, sub);
-            out.push({
-              id: sub.id,
-              name: sub.name,
-              muscleGroup: sub.muscleGroup,
-              equipment: sub.equipment,
-              instructions: sub.instructions,
-              sets: sub.sets,
-              repsMin: sub.repsMin,
-              repsMax: sub.repsMax,
-              restSecs: sub.restSecs,
-              recommendedWeightKg: rec,
-              orderInWorkout: out.length,
-              isWarmUp: false,
-              videoUrl: sub.videoUrl,
-            });
-            break;
-          }
-        }
-      }
+  const isUnavailable = (exercise: (typeof placements)[number]["exercise"]) =>
+    preferenceByExercise.get(exercise.id)?.blacklisted === true ||
+    exercise.injuryAreasToSkip.some((area) =>
+      injuredAreas.has(area.toLowerCase()),
+    );
+
+  const addExercise = (exercise: (typeof placements)[number]["exercise"]) => {
+    const preference = preferenceByExercise.get(exercise.id);
+    const increment = exercise.weightIncrementKg;
+    const initialPeak =
+      increment > 0
+        ? Math.max(
+            increment,
+            Math.round(
+              (bodyWeightKg * exercise.baseWeightPercent) / increment,
+            ) * increment,
+          )
+        : 0;
+    const peakWeightKg = preference?.currentWeightKg ?? initialPeak;
+    output.push({
+      id: exercise.id,
+      name: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      equipment: exercise.equipment,
+      instructions: exercise.instructions,
+      weightCue: exercise.weightCue,
+      sets: program.prescribedSets,
+      repsMin: exercise.repsMin,
+      repsMax: exercise.repsMax,
+      restSecs: exercise.restSecs,
+      recommendedWeightKg: recommendedWeightForWeek({
+        peakWeightKg,
+        incrementKg: increment,
+        week: program.week,
+      }),
+      weightIncrementKg: increment,
+      orderInWorkout: output.length,
+      isWarmUp: false,
+      videoUrl: exercise.videoUrl,
+    });
+    used.add(exercise.id);
+  };
+
+  for (const placement of placements) {
+    if (output.length >= limit) break;
+    const exercise = placement.exercise;
+    if (!isUnavailable(exercise) && !used.has(exercise.id)) {
+      addExercise(exercise);
       continue;
     }
-    if (skip) continue;
-    used.add(ex.id);
-    const rec = await getRecommendedWeight(userId, ex);
-    out.push({
-      id: ex.id,
-      name: ex.name,
-      muscleGroup: ex.muscleGroup,
-      equipment: ex.equipment,
-      instructions: ex.instructions,
-      sets: ex.sets,
-      repsMin: ex.repsMin,
-      repsMax: ex.repsMax,
-      restSecs: ex.restSecs,
-      recommendedWeightKg: rec,
-      orderInWorkout: out.length,
-      isWarmUp: false,
-      videoUrl: ex.videoUrl,
-    });
+
+    for (const substituteId of exercise.substituteExerciseIds) {
+      if (used.has(substituteId)) continue;
+      const substitute = await prisma.exercise.findUnique({
+        where: { id: substituteId },
+      });
+      if (substitute && !isUnavailable(substitute)) {
+        addExercise(substitute);
+        break;
+      }
+    }
   }
 
-  return out;
+  return output;
 }
 
-/** Get recommended weight for user based on preference history or bodyweight % */
-async function getRecommendedWeight(
-  userId: string,
-  exercise: { id: string; baseWeightPercent: number; weightIncrementKg: number; equipment: string }
-): Promise<number> {
-  const pref = await prisma.exercisePreference.findUnique({
-    where: { userId_exerciseId: { userId, exerciseId: exercise.id } },
-  });
-  if (pref?.currentWeightKg != null) return pref.currentWeightKg;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { currentWeight: true, startingWeight: true },
-  });
-  const bw = user?.currentWeight ?? user?.startingWeight ?? 82;
-  const raw = bw * exercise.baseWeightPercent;
-  const inc = exercise.weightIncrementKg;
-  if (inc <= 0) return 0;
-  const rounded = Math.round(raw / inc) * inc;
-  return Math.max(inc, rounded);
-}
-
-/** Get warm-up exercises in order */
 export async function getWarmUpExercises() {
   return prisma.exercise.findMany({
-    where: { isWarmUp: true },
+    where: { isWarmUp: true, programKey: { startsWith: "warm-" } },
     orderBy: { warmUpOrder: "asc" },
   });
 }

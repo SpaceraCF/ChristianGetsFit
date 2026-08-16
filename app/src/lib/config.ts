@@ -1,7 +1,7 @@
 /** Workouts planned per week (scheduled in Cal.com). */
-export const PLANNED_WORKOUTS_PER_WEEK = 5;
+export const PLANNED_WORKOUTS_PER_WEEK = 3;
 
-/** Minimum workouts per week to hit goal (avoid punishment). */
+/** Minimum workouts per calendar week to hit the consistency goal. */
 export const MIN_WORKOUTS_FOR_GOAL = 3;
 
 /** Workout window: 11:00–16:00 in user timezone (AEDT). */

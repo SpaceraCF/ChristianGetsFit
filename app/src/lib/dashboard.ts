@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
 import { startOfWeek, subWeeks, differenceInWeeks } from "date-fns";
 import { MIN_WORKOUTS_FOR_GOAL, PLANNED_WORKOUTS_PER_WEEK } from "@/lib/config";
+import { getUserProgramState } from "@/lib/workout";
 
 export async function getDashboardStats(userId: string) {
+  const program = await getUserProgramState(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { currentWeight: true, startingWeight: true, targetWeight: true, goalStartedAt: true, fitbitAccessToken: true },
@@ -51,14 +53,7 @@ export async function getDashboardStats(userId: string) {
     } else break;
   }
 
-  const lastWorkout = await prisma.workout.findFirst({
-    where: { userId, completedAt: { not: null } },
-    orderBy: { completedAt: "desc" },
-  });
-  const order: Array<"A" | "B" | "C"> = ["A", "B", "C"];
-  const nextWorkoutType = lastWorkout
-    ? order[(order.indexOf(lastWorkout.workoutType as "A" | "B" | "C") + 1) % 3]
-    : "A";
+  const nextWorkoutType = program.nextWorkoutType;
 
   const count = weekStat?.workoutsCompleted ?? workoutsThisWeek;
   const punishmentActive = count < MIN_WORKOUTS_FOR_GOAL && now >= weekStart;
@@ -112,6 +107,7 @@ export async function getDashboardStats(userId: string) {
     level,
     streak,
     nextWorkoutType,
+    program,
     currentWeight,
     targetWeight,
     startingWeight,
