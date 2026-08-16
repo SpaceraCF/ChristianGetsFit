@@ -86,9 +86,9 @@ export async function GET(req: NextRequest) {
       if (t in typeCounts) typeCounts[t]++;
     }
     const workoutTypes = [
-      { name: "Push (A)", value: typeCounts.A, fill: "#0ea5e9" },
-      { name: "Pull (B)", value: typeCounts.B, fill: "#8b5cf6" },
-      { name: "Legs (C)", value: typeCounts.C, fill: "#f59e0b" },
+      { name: "Full Body A", value: typeCounts.A, fill: "#0ea5e9" },
+      { name: "Full Body B", value: typeCounts.B, fill: "#8b5cf6" },
+      { name: "Full Body C", value: typeCounts.C, fill: "#f59e0b" },
     ];
 
     // Strength progression

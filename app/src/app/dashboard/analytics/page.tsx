@@ -282,9 +282,9 @@ function OverviewTab({ data }: { data: Analytics }) {
                   <Tooltip contentStyle={{ borderRadius: 8, fontSize: 13 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <ReferenceLine y={3} stroke="#ef4444" strokeDasharray="3 3" />
-                  <Bar dataKey="A" name="Push" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="B" name="Pull" stackId="a" fill="#8b5cf6" />
-                  <Bar dataKey="C" name="Legs" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="A" name="Full Body A" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="B" name="Full Body B" stackId="a" fill="#8b5cf6" />
+                  <Bar dataKey="C" name="Full Body C" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -1,6 +1,8 @@
 # ChristianGetsFit
 
-Fitness accountability app: 5 workouts planned per week (min 3 to hit goal), 30 min weight training (Smith machine + dumbbells). Workouts are scheduled in Cal.com 11am–4pm AEDT. Nagging, gamification, and progress tracking.
+Fitness accountability app with a session-based four-week beginner program: three full-body workouts per training week, a light-to-heavy loading wave, and a new exercise block after every 12 completed sessions. Equipment is limited to a Smith machine, dumbbells and bodyweight.
+
+The [training-program decision record](docs/TRAINING_PROGRAM.md) explains the evidence, progression rules and safety boundaries.
 
 ## Requirements
 
@@ -104,11 +106,12 @@ Commands: `/status`, `/done`, `/weight 81.5`, `/punishment`, `/skip`.
 ## Features
 
 - Google OAuth login, dashboard with weight goal and weekly workout count
-- Workouts A/B/C (Push, Pull, Legs) + express (3 exercises)
+- Full Body A/B/C + express (3 exercises), rotating through three four-week blocks
 - Warm-up, recommended weights, difficulty/enjoyment feedback, exercise blacklist
 - Weight and waist logging, analytics charts
 - Injury tracking (workouts auto-substitute)
 - Fitbit: link account, workout verification, rest-day suggestions
 - PWA manifest + service worker; screen wake lock during workouts
-- 5 workouts planned per week in Cal.com (11am–4pm AEDT), calendar updated at midnight Sunday night; min 3 to hit goal (alcohol ban if fewer). If you cancel a workout meeting, you get a Telegram reminder to rebook.
+- 3 workouts planned per week in Cal.com (11am–4pm AEDT), calendar updated at midnight Sunday night. If you cancel a workout meeting, you get a Telegram reminder to rebook.
+- Signed, read-only HealthTrack export of program state and completed workout details
 - Gamification: XP, levels, achievements

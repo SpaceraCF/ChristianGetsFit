@@ -29,6 +29,10 @@ services:
         generateValue: true
       - key: APP_URL
         value: https://cgf.one22.me
+      - key: OWNER_EMAIL
+        value: christian.farre@gmail.com
+      - key: HEALTHTRACK_BRIDGE_SECRET
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
