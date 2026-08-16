@@ -13,7 +13,7 @@ services:
     rootDir: app
     plan: starter
     buildCommand: npm ci && npm run build
-    preDeployCommand: npx prisma db push && npx tsx prisma/seed-safe.ts
+    preDeployCommand: npx prisma db execute --file prisma/prepare-program-schema.sql --schema prisma/schema.prisma && npx prisma db push && npx tsx prisma/seed-safe.ts
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
