@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, getJwtSecret());
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
     const email = (payload.email as string)?.toLowerCase?.();
     if (!email) {
       return NextResponse.redirect(new URL("/dashboard", req.url));

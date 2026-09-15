@@ -33,7 +33,7 @@ export async function getSession(): Promise<SessionUser | null> {
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, getJwtSecret());
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
     const userId = payload.userId as string;
     const email = payload.email as string;
     if (!userId || !email) return null;

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/dashboard/settings?fitbit=error`);
   }
   try {
-    const { payload } = await jwtVerify(state, getJwtSecret());
+    const { payload } = await jwtVerify(state, getJwtSecret(), { algorithms: ["HS256"] });
     const userId = payload.userId as string;
     if (!userId) throw new Error("Invalid state");
     const tokens = await exchangeFitbitCode(code, userId);
