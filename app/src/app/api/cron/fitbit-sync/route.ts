@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getFitbitDailySummary, getFitbitSleep, refreshFitbitToken } from "@/lib/fitbit";
 import { yesterdayInSydney } from "@/lib/time";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -12,9 +13,7 @@ export const maxDuration = 60;
  * Also refreshes tokens automatically if they're expired.
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

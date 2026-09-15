@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
-import { createSession, setSessionCookie } from "@/lib/auth";
-
-const SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET ?? "christian-gets-fit-dev-secret-change-me"
-);
+import { createSession, getJwtSecret, setSessionCookie } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
@@ -14,7 +10,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     const email = (payload.email as string)?.toLowerCase?.();
     if (!email) {
       return NextResponse.redirect(new URL("/dashboard", req.url));

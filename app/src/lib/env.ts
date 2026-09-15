@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional().default("postgresql://localhost:5432/app"),
-  NEXTAUTH_SECRET: z.string().optional(),
+  NEXTAUTH_SECRET: z.string().min(32).optional(),
   SENDGRID_API_KEY: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   CALCOM_API_KEY: z.string().optional(),
