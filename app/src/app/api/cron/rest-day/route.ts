@@ -4,13 +4,12 @@ import { getFitbitSleep } from "@/lib/fitbit";
 import { sendTelegram } from "@/lib/telegram";
 import { yesterdayInSydney } from "@/lib/time";
 import { wasSentToday, markSent } from "@/lib/notifications";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

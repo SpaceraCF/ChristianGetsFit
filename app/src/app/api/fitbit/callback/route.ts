@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
 import { exchangeFitbitCode } from "@/lib/fitbit";
+import { getJwtSecret } from "@/lib/auth";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
-const SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET ?? "christian-gets-fit-dev-secret"
-);
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -15,7 +13,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/dashboard/settings?fitbit=error`);
   }
   try {
-    const { payload } = await jwtVerify(state, SECRET);
+    const { payload } = await jwtVerify(state, getJwtSecret(), { algorithms: ["HS256"] });
     const userId = payload.userId as string;
     if (!userId) throw new Error("Invalid state");
     const tokens = await exchangeFitbitCode(code, userId);

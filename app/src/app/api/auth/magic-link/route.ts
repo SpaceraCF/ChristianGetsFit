@@ -3,12 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { SignJWT } from "jose";
 import sgMail from "@sendgrid/mail";
+import { getJwtSecret } from "@/lib/auth";
 
 const bodySchema = z.object({ email: z.string().email() });
 
-const SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET ?? "christian-gets-fit-dev-secret-change-me"
-);
 const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +19,7 @@ export async function POST(req: NextRequest) {
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("15m")
       .setIssuedAt()
-      .sign(SECRET);
+      .sign(getJwtSecret());
 
     await prisma.magicLinkToken.create({
       data: {

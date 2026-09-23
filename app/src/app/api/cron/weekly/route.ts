@@ -4,13 +4,12 @@ import { getDashboardStats } from "@/lib/dashboard";
 import { sendTelegram } from "@/lib/telegram";
 import { startOfWeek, subWeeks } from "date-fns";
 import { PLANNED_WORKOUTS_PER_WEEK, MIN_WORKOUTS_FOR_GOAL } from "@/lib/config";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

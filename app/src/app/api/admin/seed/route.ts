@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { seedWorkoutProgram } from "@/lib/program-catalog";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 /** Safely refreshes the program catalogue without touching workout history. */
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

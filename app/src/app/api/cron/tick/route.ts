@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -10,15 +11,15 @@ export const maxDuration = 60;
  * This keeps the free Render tier working with a single external cron job.
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const cronSecret = process.env.CRON_SECRET!;
+
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const headers: Record<string, string> = {};
-  if (cronSecret) headers["authorization"] = `Bearer ${cronSecret}`;
+  headers["authorization"] = `Bearer ${cronSecret}`;
 
   const results: Record<string, unknown> = {};
 
